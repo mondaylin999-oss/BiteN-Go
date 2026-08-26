@@ -1,0 +1,359 @@
+/* ==========================================================================
+   BiteN Go — "Nexus Transit & Dining" design system
+   Ported from the Stitch design pack (stitch_nexus_smart_canteen_ferry_system)
+   into Tailwind v4 theme tokens, so every screen can use the same names the
+   design uses: bg-surface, text-on-surface-variant, bg-secondary-container…
+
+   Colour logic (from the design brief):
+     Core UI          near-black   navigation, headings, primary actions
+     Canteen context  emerald      menus, wallet top-ups, successful states
+     Ferry context    blue         vessels, seats, departure times
+     Alerts           amber / red  low balance, delays, ASAP tickets
+   ========================================================================== */
+
+@import "tailwindcss";
+
+@theme {
+  /* --- surfaces ------------------------------------------------------- */
+  --color-surface: #f7f9fb;
+  --color-surface-dim: #d8dadc;
+  --color-surface-bright: #f7f9fb;
+  --color-surface-container-lowest: #ffffff;
+  --color-surface-container-low: #f2f4f6;
+  --color-surface-container: #eceef0;
+  --color-surface-container-high: #e6e8ea;
+  --color-surface-container-highest: #e0e3e5;
+  --color-surface-variant: #e0e3e5;
+  --color-background: #f7f9fb;
+
+  /* --- foreground ----------------------------------------------------- */
+  --color-on-surface: #191c1e;
+  --color-on-surface-variant: #45464d;
+  --color-on-background: #191c1e;
+  --color-inverse-surface: #2d3133;
+  --color-inverse-on-surface: #eff1f3;
+  --color-outline: #76777d;
+  --color-outline-variant: #c6c6cd;
+
+  /* --- primary (core UI) ---------------------------------------------- */
+  --color-primary: #000000;
+  --color-on-primary: #ffffff;
+  --color-primary-container: #131b2e;
+  --color-on-primary-container: #7c839b;
+  --color-inverse-primary: #bec6e0;
+  --color-primary-fixed: #dae2fd;
+  --color-primary-fixed-dim: #bec6e0;
+  --color-on-primary-fixed: #131b2e;
+  --color-on-primary-fixed-variant: #3f465c;
+
+  /* --- secondary (canteen) -------------------------------------------- */
+  --color-secondary: #006c49;
+  --color-on-secondary: #ffffff;
+  --color-secondary-container: #6cf8bb;
+  --color-on-secondary-container: #00714d;
+  --color-secondary-fixed: #6ffbbe;
+  --color-secondary-fixed-dim: #4edea3;
+  --color-on-secondary-fixed: #002113;
+  --color-on-secondary-fixed-variant: #005236;
+
+  /* --- tertiary (ferry) ------------------------------------------------ */
+  --color-tertiary: #0b4a75;
+  --color-on-tertiary: #ffffff;
+  --color-tertiary-container: #cce5ff;
+  --color-on-tertiary-container: #00405f;
+  --color-tertiary-fixed: #cce5ff;
+  --color-tertiary-fixed-dim: #93ccff;
+  --color-on-tertiary-fixed: #001d31;
+  --color-on-tertiary-fixed-variant: #004b73;
+
+  /* --- status --------------------------------------------------------- */
+  --color-error: #ba1a1a;
+  --color-on-error: #ffffff;
+  --color-error-container: #ffdad6;
+  --color-on-error-container: #93000a;
+  --color-warning: #b45309;
+  --color-warning-container: #fef3c7;
+  --color-on-warning-container: #7c2d12;
+
+  /* --- typography ------------------------------------------------------ */
+  --font-sans: "Inter", ui-sans-serif, system-ui, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, "SF Mono", "Cascadia Mono", Menlo, Consolas, monospace;
+
+  --text-headline-lg: 32px;
+  --text-headline-lg--line-height: 1.2;
+  --text-headline-lg--letter-spacing: -0.02em;
+  --text-headline-lg--font-weight: 700;
+  --text-headline-md: 20px;
+  --text-headline-md--line-height: 1.4;
+  --text-headline-md--font-weight: 600;
+  --text-body-base: 16px;
+  --text-body-base--line-height: 1.5;
+  --text-data: 14px;
+  --text-data--line-height: 1.2;
+  --text-data--font-weight: 500;
+  --text-label: 12px;
+  --text-label--line-height: 1.1;
+  --text-label--font-weight: 600;
+
+  /* --- shape & rhythm (8px grid) --------------------------------------- */
+  --radius-sm: 0.25rem;
+  --radius-DEFAULT: 0.5rem;
+  --radius-md: 0.75rem;
+  --radius-lg: 1rem;
+  --radius-xl: 1.5rem;
+
+  --spacing-gutter: 16px;
+  --spacing-container-margin: 24px;
+  --spacing-stack-sm: 8px;
+  --spacing-stack-md: 16px;
+  --spacing-stack-lg: 32px;
+
+  /* --- elevation ------------------------------------------------------- */
+  --shadow-card: 0 4px 12px rgb(0 0 0 / 0.02);
+  --shadow-raised: 0 12px 24px rgb(0 0 0 / 0.05);
+}
+
+/* --------------------------------------------------------------------------
+   Base
+   -------------------------------------------------------------------------- */
+@layer base {
+  html {
+    -webkit-text-size-adjust: 100%;
+  }
+
+  body {
+    margin: 0;
+    background: var(--color-surface);
+    color: var(--color-on-surface);
+    font-family: var(--font-sans);
+    font-size: 16px;
+    line-height: 1.5;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  /* Numbers must not "jump" while they update — tabular monospace, as the
+     design brief asks for money, times and ticket ids. */
+  .tabular {
+    font-family: var(--font-mono);
+    font-variant-numeric: tabular-nums;
+  }
+
+  ::selection {
+    background: var(--color-secondary-container);
+    color: var(--color-on-secondary-container);
+  }
+
+  :focus-visible {
+    outline: 2px solid var(--color-secondary);
+    outline-offset: 2px;
+  }
+}
+
+/* --------------------------------------------------------------------------
+   Components — the handful of shapes every screen repeats.
+   -------------------------------------------------------------------------- */
+@layer components {
+  .card {
+    background: var(--color-surface-container-lowest);
+    border: 1px solid var(--color-outline-variant);
+    border-radius: var(--radius-lg);
+    box-shadow: var(--shadow-card);
+  }
+
+  .card-pad {
+    padding: 16px;
+  }
+
+  .chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 4px 10px;
+    border-radius: 9999px;
+    font-size: 12px;
+    font-weight: 600;
+    letter-spacing: 0.02em;
+    text-transform: uppercase;
+  }
+
+  .btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    height: 42px;
+    padding: 0 16px;
+    border-radius: var(--radius-DEFAULT);
+    font-size: 14px;
+    font-weight: 600;
+    border: 1px solid transparent;
+    cursor: pointer;
+    transition: background-color 150ms ease, color 150ms ease, border-color 150ms ease, transform 100ms ease;
+  }
+
+  .btn:active:not(:disabled) {
+    transform: scale(0.98);
+  }
+
+  .btn:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+  }
+
+  .btn-primary {
+    background: var(--color-primary);
+    color: var(--color-on-primary);
+  }
+
+  .btn-primary:hover:not(:disabled) {
+    background: var(--color-primary-container);
+  }
+
+  .btn-canteen {
+    background: var(--color-secondary);
+    color: var(--color-on-secondary);
+  }
+
+  .btn-canteen:hover:not(:disabled) {
+    background: var(--color-on-secondary-container);
+  }
+
+  .btn-ferry {
+    background: var(--color-tertiary);
+    color: var(--color-on-tertiary);
+  }
+
+  .btn-ferry:hover:not(:disabled) {
+    background: var(--color-on-tertiary-fixed-variant);
+  }
+
+  .btn-ghost {
+    background: transparent;
+    color: var(--color-on-surface);
+    border-color: var(--color-outline-variant);
+  }
+
+  .btn-ghost:hover:not(:disabled) {
+    background: var(--color-surface-container-high);
+  }
+
+  .btn-danger {
+    background: var(--color-error-container);
+    color: var(--color-on-error-container);
+  }
+
+  .field-label {
+    display: block;
+    font-size: 12px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: var(--color-on-surface-variant);
+    margin-bottom: 6px;
+  }
+
+  .input {
+    width: 100%;
+    height: 42px;
+    padding: 0 12px;
+    border-radius: var(--radius-DEFAULT);
+    border: 1px solid var(--color-outline-variant);
+    background: var(--color-surface-container-lowest);
+    color: var(--color-on-surface);
+    font-size: 15px;
+    font-family: inherit;
+  }
+
+  textarea.input {
+    height: auto;
+    padding: 10px 12px;
+    min-height: 84px;
+  }
+
+  .input:focus {
+    outline: none;
+    border-color: var(--color-secondary);
+    box-shadow: 0 0 0 2px color-mix(in srgb, var(--color-secondary) 30%, transparent);
+  }
+
+  /* Alternating rows, as the design's data-table rule asks. */
+  .data-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 14px;
+  }
+
+  .data-table th {
+    text-align: left;
+    font-size: 12px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: var(--color-on-surface-variant);
+    padding: 10px 12px;
+    border-bottom: 1px solid var(--color-outline-variant);
+    white-space: nowrap;
+  }
+
+  .data-table td {
+    padding: 12px;
+    border-bottom: 1px solid var(--color-surface-container-high);
+    vertical-align: middle;
+  }
+
+  .data-table tbody tr:nth-child(even) {
+    background: var(--color-surface);
+  }
+
+  .nav-item {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 12px 16px;
+    border-radius: var(--radius-DEFAULT);
+    color: var(--color-on-surface-variant);
+    font-size: 14px;
+    font-weight: 600;
+    transition: background-color 150ms ease, color 150ms ease;
+  }
+
+  .nav-item:hover {
+    background: var(--color-surface-container-high);
+    color: var(--color-on-surface);
+  }
+
+  .nav-item-active {
+    background: var(--color-secondary-container);
+    color: var(--color-on-secondary-container);
+  }
+
+  .nav-item-active-ferry {
+    background: var(--color-tertiary-container);
+    color: var(--color-on-tertiary-container);
+  }
+}
+
+/* A slim scrollbar for the kitchen board's lanes. */
+.kds-scroll::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+.kds-scroll::-webkit-scrollbar-thumb {
+  background: var(--color-outline-variant);
+  border-radius: 9999px;
+}
+
+@keyframes bng-pulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.55;
+  }
+}
+
+.pulse-soft {
+  animation: bng-pulse 1.8s ease-in-out infinite;
+}

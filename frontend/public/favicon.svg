@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="BiteN Go">
+  <rect width="64" height="64" rx="14" fill="#000000"/>
+  <path d="M20 16v14a6 6 0 0 0 6 6v12a2 2 0 0 0 4 0V36a6 6 0 0 0 6-6V16a2 2 0 0 0-4 0v10a2 2 0 0 1-4 0V16a2 2 0 0 0-4 0v10a2 2 0 0 1-4 0V16a2 2 0 0 0-4 0Z" fill="#6cf8bb"/>
+  <rect x="40" y="18" width="10" height="20" rx="3" fill="#93ccff"/>
+  <rect x="42" y="38" width="6" height="8" rx="2" fill="#93ccff"/>
+</svg>
