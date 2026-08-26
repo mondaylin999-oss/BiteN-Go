@@ -149,7 +149,7 @@ export async function seedDatabase({ quiet = false } = {}) {
         startPoint: "Main Gate",
         destination: "North Hall",
         pickupLocations: "Library, Science Block, Sports Field",
-        mapUrl: "https://maps.google.com/?q=16.8409,96.1735",
+        mapUrl: "https://www.openstreetmap.org/#map=14/16.8409/96.1735",
         mapCoordinates: "16.840900, 96.173500",
         routeLineColor: "#0284C7",
         distanceKm: 7,

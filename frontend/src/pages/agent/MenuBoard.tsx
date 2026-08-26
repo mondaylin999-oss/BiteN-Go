@@ -177,7 +177,7 @@ export default function MenuBoard() {
               <Input value={name} onChange={event => setName(event.target.value)} required minLength={2} maxLength={120} placeholder="Mohinga" />
             </Field>
             <Field label="Price (kyat)">
-              <Input type="number" min={1} step={50} value={price} onChange={event => setPrice(event.target.value)} required placeholder="1500" />
+              <Input type="number" min={1} step={1} value={price} onChange={event => setPrice(event.target.value)} required placeholder="1500" />
             </Field>
             <Field label="Category">
               <Select value={category} onChange={event => setCategory(event.target.value)}>

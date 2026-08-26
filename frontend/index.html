@@ -7,15 +7,11 @@
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <title>BiteN Go — Smart Canteen &amp; Ferry</title>
     <meta name="description" content="Campus smart canteen pre-ordering and ferry bus seat booking." />
-    <!-- Inter for the interface, JetBrains Mono for money, times and codes.
-         If the machine is offline the local fallbacks below take over and the
-         app still looks right. -->
-    <link rel="preconnect" href="https://fonts.googleapis.com" />
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link
-      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@500;700&display=swap"
-      rel="stylesheet"
-    />
+    <!-- No web fonts are loaded: nothing is fetched from Google or any other
+         CDN, so the app starts the same with or without internet. The stack in
+         src/index.css uses Inter when the computer has it and falls back to the
+         system UI font (Segoe UI on Windows), and JetBrains Mono / Consolas for
+         money, times and codes. -->
   </head>
   <body>
     <div id="root"></div>

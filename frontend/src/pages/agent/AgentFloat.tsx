@@ -87,7 +87,7 @@ export default function AgentFloat() {
               </Select>
             </Field>
             <Field label="Amount (kyat)" hint={`Your float: ${kyats(data.balance)}`}>
-              <Input type="number" min={1} step={100} value={amount} onChange={event => setAmount(event.target.value)} required placeholder="10000" />
+              <Input type="number" min={1} step={1} value={amount} onChange={event => setAmount(event.target.value)} required placeholder="10000" />
             </Field>
             <Field label="Note (optional)">
               <Input value={note} onChange={event => setNote(event.target.value)} maxLength={500} placeholder="Weekly allowance" />

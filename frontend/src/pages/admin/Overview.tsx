@@ -98,7 +98,7 @@ export default function AdminOverview() {
               </Select>
             </Field>
             <Field label="Amount (kyat)">
-              <Input type="number" min={1} step={1000} value={amount} onChange={event => setAmount(event.target.value)} required placeholder="500000" />
+              <Input type="number" min={1} step={1} value={amount} onChange={event => setAmount(event.target.value)} required placeholder="500000" />
             </Field>
             <Field label="Note (optional)">
               <Input value={note} onChange={event => setNote(event.target.value)} maxLength={500} placeholder="September float" />

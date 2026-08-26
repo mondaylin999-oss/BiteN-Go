@@ -37,6 +37,17 @@ export default function StudentDashboard() {
 
   const openOrders = data.orders.filter(order => !["completed", "cancelled"].includes(order.status));
   const nextTrip = data.trips.find(trip => trip.trip.status === "scheduled" || trip.trip.status === "boarding");
+  // One line per ferry road, not per departure — the same road often has
+  // several departures and listing each one just repeats the same name.
+  const nextPerRoad = Array.from(
+    data.trips
+      .reduce((roads, trip) => {
+        const existing = roads.get(trip.route.id);
+        if (!existing || new Date(trip.trip.departureAt).getTime() < new Date(existing.trip.departureAt).getTime()) roads.set(trip.route.id, trip);
+        return roads;
+      }, new Map<number, (typeof data.trips)[number]>())
+      .values(),
+  ).sort((left, right) => new Date(left.trip.departureAt).getTime() - new Date(right.trip.departureAt).getTime());
   const myBookings = data.trips.filter(trip => trip.ownBooking);
 
   return (
@@ -102,11 +113,11 @@ export default function StudentDashboard() {
             </Link>
           }
         >
-          {data.trips.length === 0 ? (
+          {nextPerRoad.length === 0 ? (
             <EmptyState title="No trips scheduled" description="The administrator schedules departures; they show up here as soon as they do." />
           ) : (
             <ul className="space-y-4">
-              {data.trips.slice(0, 3).map(trip => (
+              {nextPerRoad.slice(0, 3).map(trip => (
                 <li key={trip.trip.id} className="space-y-2">
                   <div className="flex items-start justify-between gap-3">
                     <div className="min-w-0">

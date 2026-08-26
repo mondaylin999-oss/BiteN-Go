@@ -1,7 +1,7 @@
 // ===========================================================================
 //  driver/RouteEditor.tsx — the transport agent's own route and its map.
 //
-//  The driver edits the stops, the fare and the Google Maps link of the routes
+//  The driver edits the stops, the fare and an optional external map link
 //  assigned to them, and publishes the geographic nodes that draw the route
 //  line students see in Ferry Tracking.
 // ===========================================================================
@@ -161,10 +161,10 @@ export default function RouteEditor() {
             </Field>
             <div className="grid gap-4 sm:grid-cols-2">
               <Field label="Fare per seat (kyat)" hint={`Now ${kyats(selected.route.fareCents)}`}>
-                <Input type="number" min={1} step={100} value={fare} onChange={event => setFare(event.target.value)} required />
+                <Input type="number" min={1} step={1} value={fare} onChange={event => setFare(event.target.value)} required />
               </Field>
-              <Field label="Google Maps link" hint="Must start with https://">
-                <Input value={mapUrl} onChange={event => setMapUrl(event.target.value)} placeholder="https://maps.google.com/?q=16.84,96.17" />
+              <Field label="Extra map link (optional)" hint="Any https:// link. The map below needs no link at all.">
+                <Input value={mapUrl} onChange={event => setMapUrl(event.target.value)} placeholder="https://www.openstreetmap.org/#map=15/16.8409/96.1735" />
               </Field>
             </div>
             <Button type="submit" variant="ferry" busy={busy}>
@@ -235,7 +235,7 @@ export default function RouteEditor() {
               height={360}
               editable
               // Clicking the map appends a stop with its coordinates already
-              // filled in — far easier than reading numbers off Google Maps.
+              // filled in — no need to read coordinates off any other site.
               onAddNode={(latitude, longitude) =>
                 setNodes(current => [
                   ...current,

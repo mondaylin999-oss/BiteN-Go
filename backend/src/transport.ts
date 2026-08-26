@@ -60,7 +60,7 @@ function optionalMapUrl(value: string | undefined) {
   if (value === undefined) return undefined;
   const url = value.trim();
   if (!url) return null;
-  if (!/^https:\/\//i.test(url) || url.length > 2048) fail("Enter a valid HTTPS Google Maps link.");
+  if (!/^https:\/\//i.test(url) || url.length > 2048) fail("Enter a valid https:// map link.");
   return url;
 }
 

@@ -70,6 +70,8 @@ biten-go/
 12. [Troubleshooting](#12-troubleshooting)
 13. [What changed from your two zips](#13-what-changed-from-your-two-zips)
 14. [The ferry map — real roads with Leaflet + OSRM](#14-the-ferry-map--real-roads-with-leaflet--osrm)
+15. [doctor.bat — one click that checks everything](#15-doctorbat--one-click-that-checks-everything)
+16. [Version history](#16-version-history)
 
 ---
 
@@ -773,3 +775,65 @@ for a demo.)
 
 `frontend/package.json` gained `leaflet`, `leaflet-routing-machine` and
 `@types/leaflet`. A plain `npm install` in `frontend/` installs them.
+
+---
+
+## 15. doctor.bat — one click that checks everything
+
+Double-click **`doctor.bat`** in this folder. It takes a couple of minutes and
+writes **`doctor-report.txt`** next to it.
+
+It does, in order:
+
+1. prints your Node, npm and PostgreSQL versions
+2. `npm install` in `backend/` and in `frontend/` — safe to re-run
+3. checks that `leaflet`, `leaflet-routing-machine`, `react`, `wouter` and
+   `lucide-react` are really installed, and prints each version
+4. type-checks both halves, then runs a **real `vite build`** of the frontend —
+   this is the step that catches a blank white page *before* you see it in the
+   browser, because a missing package or a mistyped import fails the build
+5. if the backend is already running on port 8000, logs in as `admin`,
+   `agent01`, `driver01` and `student01` and calls the main endpoints for each,
+   printing the result of every one — including how many map nodes each ferry
+   route has, since "no route line published yet" on the student map is almost
+   always zero nodes
+
+Everything it prints is also in `doctor-report.txt`. If something is broken,
+send that file — it contains the exact error text, which is far quicker than
+describing the symptom.
+
+The report contains no passwords beyond the shared demo one (`biten123`) and no
+database contents — just versions, build output and endpoint results.
+
+---
+
+## 16. Version history
+
+**v3**
+
+- **Money boxes accept any amount.** Every kyat field was `step="100"` (or 50,
+  or 1000) with `min="1"`, so the browser only accepted 1, 101, 201… A fare of
+  200,000 was rejected with *"the two nearest valid values are 199901 and
+  200001"*. All six money inputs — route fare (driver and admin), ferry monthly
+  fee, admin allocation, agent payout and dish price — are now `step="1"`, so
+  any whole number of kyats is accepted.
+- **One card per ferry road.** Ferry Tracking grouped every departure under its
+  road instead of showing the same road once per departure. The departure times
+  sit inside the card as buttons; picking one updates the seat counts, the map
+  and the request button. The student dashboard's "next departures" list is
+  grouped the same way.
+
+**v2**
+
+- Real road map: Leaflet + OpenStreetMap + OSRM through Leaflet Routing Machine
+  (section 14). Click-to-draw route editor. No API key.
+- Google removed everywhere: no Maps links, no Google Fonts, nothing fetched
+  from Google.
+- `doctor.bat` (section 15).
+- Fixed the blank white page: `TransportOps.tsx` imported the icon `MapPlus`,
+  which does not exist in lucide-react 0.453.
+
+**v1**
+
+- The merge itself: your BiteN Go app + the Stitch design pack, laid out like
+  GameBuddy, on PostgreSQL, with the C++ engine at the centre and Manus removed.

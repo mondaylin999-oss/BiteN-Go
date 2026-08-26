@@ -297,6 +297,17 @@ export function RouteMap({
   const kilometres = summary ? (summary.distanceMetres / 1000).toFixed(1) : null;
   const minutes = summary ? Math.max(1, Math.round(summary.durationSeconds / 60)) : null;
 
+  // "Open in OpenStreetMap" — the full route, in openstreetmap.org's own
+  // directions view, using the same OSRM car engine this map uses. Built from
+  // the stops themselves, so it is always correct and nobody has to paste a
+  // link from anywhere.
+  const osmLink =
+    points.length >= 2
+      ? `https://www.openstreetmap.org/directions?engine=fossgis_osrm_car&route=${points
+          .map(point => `${point.lat.toFixed(6)},${point.lng.toFixed(6)}`)
+          .join(";")}`
+      : null;
+
   return (
     <div className="space-y-2">
       <div className="relative overflow-hidden rounded-lg border border-outline-variant bg-surface-container-low" style={{ height }}>
@@ -325,9 +336,13 @@ export function RouteMap({
           {points.length >= 2 ? ` · ${points[0]!.name} → ${points[points.length - 1]!.name}` : ""}
           {kilometres ? ` · ${kilometres} km by road · about ${minutes} min driving` : ""}
         </span>
-        {mapUrl ? (
+        {osmLink ? (
+          <a className="inline-flex items-center gap-1 font-semibold text-tertiary underline" href={osmLink} target="_blank" rel="noreferrer">
+            Open in OpenStreetMap <ExternalLink className="h-3 w-3" />
+          </a>
+        ) : mapUrl ? (
           <a className="inline-flex items-center gap-1 font-semibold text-tertiary underline" href={mapUrl} target="_blank" rel="noreferrer">
-            Google Maps <ExternalLink className="h-3 w-3" />
+            Open the saved map link <ExternalLink className="h-3 w-3" />
           </a>
         ) : null}
       </div>

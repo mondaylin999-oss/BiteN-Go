@@ -308,7 +308,7 @@ export default function TransportOps() {
                     <Input type="number" min={1} max={200} value={form.totalSeats ?? "18"} onChange={set("totalSeats")} required />
                   </Field>
                   <Field label="Monthly fee (kyat)">
-                    <Input type="number" min={0} step={1000} value={form.monthlyFeeCents ?? "45000"} onChange={set("monthlyFeeCents")} />
+                    <Input type="number" min={0} step={1} value={form.monthlyFeeCents ?? "45000"} onChange={set("monthlyFeeCents")} />
                   </Field>
                 </div>
                 <Field label="Assign to transport agent">
@@ -342,10 +342,10 @@ export default function TransportOps() {
                 </Field>
                 <div className="grid gap-4 sm:grid-cols-2">
                   <Field label="Fare per seat (kyat)">
-                    <Input type="number" min={1} step={100} value={form.fareCents ?? ""} onChange={set("fareCents")} required placeholder="1500" />
+                    <Input type="number" min={1} step={1} value={form.fareCents ?? ""} onChange={set("fareCents")} required placeholder="1500" />
                   </Field>
-                  <Field label="Google Maps link (optional)">
-                    <Input value={form.mapUrl ?? ""} onChange={set("mapUrl")} placeholder="https://maps.google.com/?q=…" />
+                  <Field label="Extra map link (optional)">
+                    <Input value={form.mapUrl ?? ""} onChange={set("mapUrl")} placeholder="https://www.openstreetmap.org/#map=15/16.84/96.17" />
                   </Field>
                 </div>
                 <div className="grid gap-4 sm:grid-cols-2">
