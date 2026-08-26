@@ -3,7 +3,7 @@
 // ===========================================================================
 
 import { useState, type FormEvent } from "react";
-import { Bus, CalendarPlus, MapPlus, Plus, Wrench } from "lucide-react";
+import { Bus, CalendarPlus, MapPinned, Plus, Wrench } from "lucide-react";
 import { api, ApiError, type DriverRow, type MaintenanceRow, type RouteRow, type TripRow, type VehicleRow } from "@/lib/api";
 import { useApiData } from "@/hooks/useApiData";
 import { clock, day, kyats } from "@/lib/format";
@@ -111,7 +111,7 @@ export default function TransportOps() {
               <Plus className="h-4 w-4" /> Ferry bus
             </Button>
             <Button variant="ghost" onClick={() => setDialog("route")}>
-              <MapPlus className="h-4 w-4" /> Route
+              <MapPinned className="h-4 w-4" /> Route
             </Button>
             <Button variant="ferry" onClick={() => setDialog("trip")}>
               <CalendarPlus className="h-4 w-4" /> Departure

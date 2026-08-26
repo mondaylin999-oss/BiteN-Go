@@ -69,6 +69,7 @@ biten-go/
 11. [Verifying it works](#11-verifying-it-works)
 12. [Troubleshooting](#12-troubleshooting)
 13. [What changed from your two zips](#13-what-changed-from-your-two-zips)
+14. [The ferry map — real roads with Leaflet + OSRM](#14-the-ferry-map--real-roads-with-leaflet--osrm)
 
 ---
 
@@ -435,6 +436,10 @@ nothing breaks when the page and the API are on different addresses.
 kitchen board every 15 seconds, ferry departures every 20, meal orders every 30.
 Everything else reloads right after you change it.
 
+**The map** is the one screen that also calls the outside world — it fetches map
+tiles from OpenStreetMap and the driving path from OSRM. Section 14 explains it,
+including what happens when the laptop is offline.
+
 ---
 
 ## 8. The rules the system enforces
@@ -682,3 +687,89 @@ window, cash-or-wallet payment, the money flow between admin, agents and
 students, the ferry buses, routes, stops, trips, seat requests, driver-published
 route maps, capacity limits and maintenance reports are all here — running on
 PostgreSQL, in the new design.
+
+---
+
+## 14. The ferry map — real roads with Leaflet + OSRM
+
+The route line on the map **follows real roads**. It is not a straight line
+between the stops and it is not a picture — the path is calculated by a routing
+engine, the same way openstreetmap.org gives you directions.
+
+### The four pieces, and what each one does
+
+| Piece | Job | Cost |
+|---|---|---|
+| **Leaflet** | the map itself: tiles, pan, zoom, the numbered pins | free (MIT) |
+| **OpenStreetMap** | the map images | free, no account, no key |
+| **OSRM** | given the stops, returns the driving path along real roads, plus the real distance and driving time | free demo server, no key |
+| **Leaflet Routing Machine** | the glue: sends the stops to OSRM and draws the path Leaflet | free (BSD) |
+
+There is **no API key anywhere**. The earlier version of this project drew the
+map with Google Maps through a hosted proxy, which needed a key that stopped
+working the moment the app was made to run on your own computer.
+
+All of it lives in one file: `frontend/src/components/RouteMap.tsx`.
+
+### Where the stops come from
+
+The transport agent (driver) publishes them in **Route & Map**, and they are
+stored in the `route_map_nodes` table — name, latitude, longitude, order.
+The API endpoint is `POST /transport/driver/routes/:id/map`; students read them
+back with the route in `GET /transport/routes`.
+
+So the *stops* are yours, in your database. Only the *road between them* is
+worked out by OSRM, live, in the browser.
+
+### Drawing a route as the driver
+
+1. Log in as `driver01`, open **Route & Map**.
+2. **Click the map** where the bus stops. Each click adds a point with its
+   coordinates already filled in — no more copying numbers out of Google Maps.
+3. **Drag a numbered pin** to move a stop; the trash button removes one.
+4. The caption under the map shows what OSRM measured, e.g.
+   *"5 stops · Main Gate → North Hall · 4.8 km by road · about 14 min driving"*.
+5. **Publish route line** saves the stops. **Save route** additionally stores the
+   measured `distance_km` and `estimated_minutes` on the route, so those numbers
+   are measured rather than guessed.
+
+Students then see the same road line in **Ferry Tracking**.
+
+### If the laptop is offline
+
+Tiles will not load and OSRM cannot answer. The map then draws a **dashed
+straight line** between the stops and says so in small print underneath, so a
+demo without internet still shows the shape of the route instead of an error.
+
+### Using your own routing server (optional)
+
+The public demo server `https://router.project-osrm.org` is rate limited and
+asks not to be hammered. If you want the map to work with no internet at all,
+or you need it to be reliable during a presentation, run OSRM yourself from a
+Myanmar map extract:
+
+```bash
+# once: prepare the data (about 10 minutes for Myanmar)
+wget https://download.geofabrik.de/asia/myanmar-latest.osm.pbf
+docker run -t -v "${PWD}:/data" osrm/osrm-backend osrm-extract -p /opt/car.lua /data/myanmar-latest.osm.pbf
+docker run -t -v "${PWD}:/data" osrm/osrm-backend osrm-partition /data/myanmar-latest.osrm
+docker run -t -v "${PWD}:/data" osrm/osrm-backend osrm-customize /data/myanmar-latest.osrm
+
+# then: serve it on port 5000
+docker run -t -i -p 5000:5000 -v "${PWD}:/data" osrm/osrm-backend osrm-routed --algorithm mld /data/myanmar-latest.osrm
+```
+
+Then put this in `frontend/.env`:
+
+```
+VITE_OSRM_URL=http://localhost:5000/route/v1
+```
+
+(Tiles would still come from the internet. For a fully offline map you would
+also self-host a tile server, which is a much bigger job — usually not worth it
+for a demo.)
+
+### Packages this added
+
+`frontend/package.json` gained `leaflet`, `leaflet-routing-machine` and
+`@types/leaflet`. A plain `npm install` in `frontend/` installs them.

@@ -273,6 +273,10 @@ transportRouter.patch(
         fareCents: z.number().int().positive().optional(),
         mapUrl: z.string().max(2048).optional(),
         mapCoordinates: z.string().max(128).optional(),
+        // Measured by OSRM in the driver's route editor (see
+        // frontend/src/components/RouteMap.tsx) rather than typed by hand.
+        distanceKm: z.number().int().positive().max(2000).optional(),
+        estimatedMinutes: z.number().int().positive().max(1440).optional(),
       }),
       req.body,
     );

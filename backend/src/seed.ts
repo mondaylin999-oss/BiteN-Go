@@ -17,7 +17,7 @@ import { nanoid } from "nanoid";
 import { assertSchemaInstalled, closeDatabase, db } from "./database.js";
 import { ENV } from "./env.js";
 import { hashPassword, isUsableHash } from "./auth.js";
-import { foodItems, transactions, transportRoutes, trips, users, vehicles, routeStops, driverProfiles } from "../drizzle/schema.js";
+import { foodItems, transactions, transportRoutes, trips, users, vehicles, routeStops, routeMapNodes, driverProfiles } from "../drizzle/schema.js";
 import { yangonDateKey, yangonHour } from "./time.js";
 
 type SeedAccount = { username: string; name: string; email: string; role: "admin" | "agent" | "user" | "driver" };
@@ -168,6 +168,20 @@ export async function seedDatabase({ quiet = false } = {}) {
         { routeId, name: "Sports Field", stopOrder: 3 },
       ]);
 
+    // The geographic route line students see on the map. These are real
+    // points along real Yangon roads, so OSRM can return a genuine driving
+    // path between them instead of a straight line across the city.
+    // The driver can move, add or remove them in Route & Map at any time.
+    await db()
+      .insert(routeMapNodes)
+      .values([
+        { routeId, name: "Main Gate", latitude: "16.825300", longitude: "96.132900", nodeOrder: 1 },
+        { routeId, name: "Library", latitude: "16.830200", longitude: "96.138500", nodeOrder: 2 },
+        { routeId, name: "Science Block", latitude: "16.834000", longitude: "96.146700", nodeOrder: 3 },
+        { routeId, name: "Sports Field", latitude: "16.842000", longitude: "96.155200", nodeOrder: 4 },
+        { routeId, name: "North Hall", latitude: "16.851000", longitude: "96.163100", nodeOrder: 5 },
+      ]);
+
     const hour = 60 * 60 * 1000;
     await db()
       .insert(trips)
@@ -175,7 +189,7 @@ export async function seedDatabase({ quiet = false } = {}) {
         { routeId, driverId, vehicleId, departureAt: new Date(Date.now() + 3 * hour), status: "scheduled" },
         { routeId, driverId, vehicleId, departureAt: new Date(Date.now() + 27 * hour), status: "scheduled" },
       ]);
-    log("Ferry bus, route and two upcoming trips added.");
+    log("Ferry bus, route, map line and two upcoming trips added.");
   }
 
   // --- opening money ------------------------------------------------------

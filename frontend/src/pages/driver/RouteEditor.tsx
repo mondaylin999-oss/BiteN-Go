@@ -30,6 +30,9 @@ export default function RouteEditor() {
   const [mapUrl, setMapUrl] = useState("");
   const [color, setColor] = useState("#0284C7");
   const [nodes, setNodes] = useState<NodeDraft[]>([]);
+  // Filled in by the map: the real driving distance and time OSRM reports
+  // for the published stops. Saved with the route so nobody has to guess.
+  const [road, setRoad] = useState<{ km: number; minutes: number } | null>(null);
 
   const routes: RouteRow[] = data?.routes ?? [];
   const selected = routes.find(row => row.route.id === selectedId) ?? routes[0] ?? null;
@@ -45,6 +48,7 @@ export default function RouteEditor() {
     setFare(String(selected.route.fareCents));
     setMapUrl(selected.route.mapUrl ?? "");
     setColor(selected.route.routeLineColor || "#0284C7");
+    setRoad(null);
     setNodes(
       selected.mapNodes.length
         ? selected.mapNodes.map(node => ({ name: node.name, latitude: String(node.latitude), longitude: String(node.longitude) }))
@@ -71,6 +75,8 @@ export default function RouteEditor() {
           .filter(Boolean),
         fareCents: Math.round(Number(fare)),
         mapUrl: mapUrl.trim() || undefined,
+        distanceKm: road?.km,
+        estimatedMinutes: road?.minutes,
       });
       setMessage({ tone: "ferry", text: "Route saved." });
       await refresh();
@@ -222,7 +228,34 @@ export default function RouteEditor() {
               </Button>
             </div>
 
-            <RouteMap nodes={previewNodes} color={color} mapUrl={mapUrl || null} />
+            <RouteMap
+              nodes={previewNodes}
+              color={color}
+              mapUrl={mapUrl || null}
+              height={360}
+              editable
+              // Clicking the map appends a stop with its coordinates already
+              // filled in — far easier than reading numbers off Google Maps.
+              onAddNode={(latitude, longitude) =>
+                setNodes(current => [
+                  ...current,
+                  { name: `Point ${current.length + 1}`, latitude: latitude.toFixed(6), longitude: longitude.toFixed(6) },
+                ])
+              }
+              // Dragging a numbered pin moves that stop.
+              onMoveNode={(index, latitude, longitude) =>
+                setNodes(current =>
+                  current.map((entry, position) =>
+                    position === index ? { ...entry, latitude: latitude.toFixed(6), longitude: longitude.toFixed(6) } : entry,
+                  ),
+                )
+              }
+              // OSRM measures the real driving distance and time; keep them so
+              // "Save route" can store them on the route.
+              onSummary={next =>
+                setRoad({ km: Math.max(1, Math.round(next.distanceMetres / 1000)), minutes: Math.max(1, Math.round(next.durationSeconds / 60)) })
+              }
+            />
           </div>
         </Card>
       </div>

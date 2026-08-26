@@ -376,7 +376,20 @@ export async function updateTransportRoute(
 export async function updateOwnFerryRoute(
   driverId: number,
   routeId: number,
-  input: { name?: string; startPoint?: string; destination?: string; stops?: string[]; fareCents?: number; mapUrl?: string; mapCoordinates?: string },
+  // distanceKm / estimatedMinutes come from OSRM in the route editor: the map
+  // measures the real driving distance and time, and the driver saves them
+  // with the route so students see honest numbers.
+  input: {
+    name?: string;
+    startPoint?: string;
+    destination?: string;
+    stops?: string[];
+    fareCents?: number;
+    mapUrl?: string;
+    mapCoordinates?: string;
+    distanceKm?: number | null;
+    estimatedMinutes?: number | null;
+  },
 ) {
   const owned = await db()
     .select({ id: transportRoutes.id })

@@ -357,3 +357,37 @@
 .pulse-soft {
   animation: bng-pulse 1.8s ease-in-out infinite;
 }
+
+/* ==========================================================================
+   Leaflet — the real road map (src/components/RouteMap.tsx)
+   --------------------------------------------------------------------------
+   Leaflet stacks its own layers from z-index 400 and its zoom/attribution
+   controls up to 1000. Left alone, a map would therefore float ABOVE the
+   fixed top bar and the phone bottom bar. Giving the map container its own
+   stacking context keeps every part of Leaflet inside the card it lives in.
+   ========================================================================== */
+.leaflet-container {
+  z-index: 0;
+  isolation: isolate;
+  /* Inter, like the rest of the interface, instead of Leaflet's default. */
+  font: inherit;
+  background: var(--color-surface-container-low);
+}
+
+.leaflet-container .leaflet-control-attribution {
+  font-size: 10px;
+  background: rgba(255, 255, 255, 0.82);
+}
+
+/* Our numbered pins are plain HTML (L.divIcon), so remove the white box
+   Leaflet would otherwise draw behind them. */
+.leaflet-div-icon {
+  background: transparent;
+  border: 0;
+}
+
+/* The turn-by-turn itinerary panel is switched off in code; this makes sure
+   no stray copy of it can cover the map either. */
+.leaflet-routing-container {
+  display: none;
+}
