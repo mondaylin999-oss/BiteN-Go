@@ -2,9 +2,6 @@
 
 > ## ⚡ What is new in this version
 >
-> This is the merge of your two BiteN Go zips, rebuilt the way the GameBuddy
-> project is built:
->
 > - **The frontend is a separate app, wired to a separate backend.** They talk
 >   over a plain REST API, and every screen reads and writes **one shared
 >   PostgreSQL database**. Register on your laptop, log in on your phone — same
