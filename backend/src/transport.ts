@@ -16,6 +16,7 @@
 // ===========================================================================
 
 import { and, asc, desc, eq, gt, gte, inArray, lt } from "drizzle-orm";
+import { alias } from "drizzle-orm/pg-core";
 import { db } from "./database.js";
 import {
   driverProfiles,
@@ -23,7 +24,6 @@ import {
   routeMapNodes,
   routeStops,
   routeTimetables,
-  transportPayments,
   transportRoutes,
   trips,
   users,
@@ -31,8 +31,11 @@ import {
   vehicles,
 } from "../drizzle/schema.js";
 import { addMonths, daysInMonth, isMonthKey, yangonMonthKey, yangonWallClockToDate } from "./time.js";
-import { createMovement, getWalletBalance } from "./cashflow.js";
 import { callEngine, EngineRuleError } from "./engine.js";
+
+/** `users` a second time, for the agent who runs a road: a seat row already
+ *  joins `users` once for the passenger. */
+const driver = alias(users, "road_driver");
 
 export type TripStatus = "scheduled" | "boarding" | "in_progress" | "completed" | "cancelled";
 export type BookingStatus = "pending" | "confirmed" | "cancelled";
@@ -440,12 +443,16 @@ export async function getTransportRoute(routeId: number) {
     .select({
       route: transportRoutes,
       driverName: users.name,
+      // The student pays the agent outside the app, so the phone number has to
+      // travel with the road — it is the only way to reach them.
+      driverPhone: driverProfiles.phone,
       vehiclePlate: vehicles.plateNumber,
       vehicleSeats: vehicles.totalSeats,
       vehicleStatus: vehicles.status,
     })
     .from(transportRoutes)
     .leftJoin(users, eq(transportRoutes.driverId, users.id))
+    .leftJoin(driverProfiles, eq(transportRoutes.driverId, driverProfiles.userId))
     .leftJoin(vehicles, eq(transportRoutes.vehicleId, vehicles.id))
     .where(eq(transportRoutes.id, routeId))
     .limit(1);
@@ -610,18 +617,30 @@ export async function transitionTripStatus(tripId: number, driverId: number, nex
 // --- monthly seats ---------------------------------------------------------
 //
 //  The ferry is sold BY THE MONTH. A student asks for one seat on one road for
-//  one calendar month; the transport agent accepts it once; the monthly fare
-//  leaves the student's wallet once. Every seat sum here is decided by the C++
-//  engine (cpp/src/MonthlyPassPlanner.cpp) — this module is the PostgreSQL and
-//  the money side of it.
+//  one calendar month, and the transport agent accepts it once.
+//
+//  NO MONEY MOVES THROUGH THE APP HERE. The student rings the agent on the
+//  number shown beside the road and sends the fare the way they always have.
+//  The agent holds no balance in BiteN Go, nothing is taken from the student's
+//  wallet (that is the canteen wallet), and no cash-flow row is written. The
+//  monthly price is what the agent announces, kept on the seat so both sides
+//  can see what was agreed.
+//
+//  Every seat sum is decided by the C++ engine (cpp/src/MonthlyPassPlanner.cpp)
+//  — this module is the PostgreSQL side of it.
 
-/** How far ahead a seat may be booked. */
-export const MONTHS_ON_SALE = 3;
+/** How far ahead an agent may publish a timetable: two years. */
+export const MONTHS_PUBLISHABLE = 24;
 
-/** The months a student may choose right now: this one and the next few. */
+/**
+ * The months an agent is allowed to publish a timetable for: this one and the
+ * next two years' worth. The agent picks freely inside that window — a road is
+ * on sale for a month only once its timetable exists, so this list is about
+ * what the picker offers, not about what students can buy.
+ */
 export function monthsOnSale(now = new Date()) {
   const current = yangonMonthKey(now);
-  return Array.from({ length: MONTHS_ON_SALE }, (_, index) => addMonths(current, index));
+  return Array.from({ length: MONTHS_PUBLISHABLE }, (_, index) => addMonths(current, index));
 }
 
 /** Every monthly seat in the system, in the shape the engine expects. */
@@ -668,17 +687,31 @@ async function roadWithVehicle(routeId: number) {
  */
 export async function listRoadMonths(input: { userId?: number; activeOnly?: boolean; now?: Date } = {}) {
   const now = input.now ?? new Date();
-  const months = monthsOnSale(now);
   const roads = await listTransportRoutes(input.activeOnly ?? false);
   if (!roads.length) return [];
 
   const vehicleRows = await db().select().from(vehicles);
   const passes = await enginePasses();
   const timetables = await db().select().from(routeTimetables);
+  const current = yangonMonthKey(now);
+
+  /**
+   * Which months this road offers. NOT a fixed window: a month is offered
+   * because the agent published a timetable for it, so an agent who plans six
+   * months ahead sells six months ahead. Months already finished drop off,
+   * except one a student still holds a seat in, which stays visible to them.
+   */
+  const monthsFor = (routeId: number) => {
+    const published = timetables.filter(entry => entry.routeId === routeId).map(entry => entry.month);
+    const held = passes.filter(pass => pass.routeId === routeId && REQUEST_STATUSES.includes(pass.status as BookingStatus)).map(pass => pass.month);
+    return Array.from(new Set([...published, ...held]))
+      .filter(month => month >= current)
+      .sort();
+  };
 
   const roadMonths = roads.flatMap(road => {
     const vehicle = vehicleRows.find(candidate => candidate.id === road.route.vehicleId) ?? null;
-    return months.map(month => engineRoad({ route: road.route, vehicle }, month));
+    return monthsFor(road.route.id).map(month => engineRoad({ route: road.route, vehicle }, month));
   });
 
   const { roads: plan } = await callEngine<{
@@ -689,14 +722,14 @@ export async function listRoadMonths(input: { userId?: number; activeOnly?: bool
     ? await db().select().from(rideBookings).where(and(eq(rideBookings.userId, input.userId), inArray(rideBookings.status, REQUEST_STATUSES)))
     : [];
 
-  const currentMonth = yangonMonthKey(now);
+  const currentMonth = current;
 
   return roads.map(road => {
     const vehicle = vehicleRows.find(candidate => candidate.id === road.route.vehicleId) ?? null;
     return {
       ...road,
       vehicle,
-      months: months.map(month => {
+      months: monthsFor(road.route.id).map(month => {
         const seats = plan.find(entry => entry.routeId === road.route.id && entry.month === month);
         return {
           month,
@@ -750,10 +783,11 @@ export async function requestMonthlySeat(input: { routeId: number; userId: numbe
 /**
  * The transport agent accepts or refuses a request.
  *
- * Accepting is where the money moves: the monthly fare leaves the student's
- * wallet and is recorded against the agent, so the cash-flow screens show the
- * ferry income beside the canteen income. A student who cannot cover the fare
- * cannot be accepted — the seat stays waiting instead of going unpaid.
+ * NO MONEY MOVES HERE. The ferry fare is settled between the student and the
+ * agent outside this app: the student rings the number on the road's card and
+ * sends the money the way they always have. The agent then accepts, and
+ * accepting is purely "yes, this seat is yours for that month". The app never
+ * holds, moves or counts ferry money, and an agent has no balance in it.
  */
 export async function decideMonthlySeat(input: { passId: number; driverId: number; status: "confirmed" | "cancelled" }) {
   const rows = await db()
@@ -767,7 +801,6 @@ export async function decideMonthlySeat(input: { passId: number; driverId: numbe
 
   if (input.status === "cancelled") {
     if (row.pass.status === "cancelled") fail("That request was already cancelled.");
-    if (row.pass.status === "confirmed") await refundMonthlySeat(row.pass.id, row.route.driverId!, row.pass.userId);
     await db().update(rideBookings).set({ status: "cancelled" }).where(eq(rideBookings.id, input.passId));
     return true;
   }
@@ -781,54 +814,13 @@ export async function decideMonthlySeat(input: { passId: number; driverId: numbe
   });
   if (!decision.allowed) fail(decision.reason);
 
-  const balance = await getWalletBalance(row.pass.userId);
-  if (balance < decision.fareCents)
-    fail(`This student's wallet holds ${balance} Ks — the month costs ${decision.fareCents} Ks. Ask them to top up first.`);
-
-  const transactionId = await createMovement({
-    createdById: input.driverId,
-    userId: row.pass.userId,
-    agentId: null,
-    direction: "out",
-    sourceRole: "user",
-    targetRole: "driver",
-    amountCents: decision.fareCents,
-    note: `Ferry seat · ${row.route.name} · ${row.pass.month}`,
-    occurredAt: new Date(),
-  });
-
-  await db().transaction(async tx => {
-    await tx.update(rideBookings).set({ status: "confirmed", fareCents: decision.fareCents }).where(eq(rideBookings.id, input.passId));
-    await tx.insert(transportPayments).values({ bookingId: input.passId, transactionId, amountCents: decision.fareCents, status: "charged" });
-  });
+  // The fare is recorded on the seat so both sides can see what was agreed,
+  // but nothing is taken from anybody's wallet — see the note above.
+  await db().update(rideBookings).set({ status: "confirmed", fareCents: decision.fareCents }).where(eq(rideBookings.id, input.passId));
   return true;
 }
 
-/** Put the monthly fare back in the student's wallet. */
-async function refundMonthlySeat(passId: number, driverId: number, userId: number) {
-  const paymentRows = await db().select().from(transportPayments).where(eq(transportPayments.bookingId, passId)).limit(1);
-  const payment = paymentRows[0];
-  if (!payment || payment.status === "refunded") return;
-
-  const refundId = await createMovement({
-    createdById: driverId,
-    userId,
-    agentId: null,
-    direction: "in",
-    sourceRole: "driver",
-    targetRole: "user",
-    amountCents: payment.amountCents,
-    note: "Ferry seat refund",
-    occurredAt: new Date(),
-  });
-
-  await db()
-    .update(transportPayments)
-    .set({ status: "refunded", refundedTransactionId: refundId, refundedAt: new Date() })
-    .where(eq(transportPayments.id, payment.id));
-}
-
-/** A student gives up their own seat. A month already running is not refunded. */
+/** A student gives up their own seat. */
 export async function cancelOwnMonthlySeat(passId: number, userId: number) {
   const rows = await db()
     .select({ pass: rideBookings, route: transportRoutes })
@@ -843,11 +835,8 @@ export async function cancelOwnMonthlySeat(passId: number, userId: number) {
   const currentMonth = yangonMonthKey();
   if (row.pass.month < currentMonth) fail("That month has already finished.");
 
-  // Refunded only if the month has not started yet — a month already being
-  // travelled has been used.
-  if (row.pass.status === "confirmed" && row.pass.month > currentMonth && row.route.driverId)
-    await refundMonthlySeat(row.pass.id, row.route.driverId, userId);
-
+  // Nothing to refund: the app never took the fare. Any money already sent to
+  // the agent is settled between the two of them, as it was paid.
   await db().update(rideBookings).set({ status: "cancelled" }).where(eq(rideBookings.id, passId));
   return true;
 }
@@ -865,10 +854,15 @@ export async function listMonthlySeats(input: { routeId?: number; driverId?: num
       route: transportRoutes,
       passengerName: users.name,
       passengerUsername: users.username,
+      // Shown on the student's pass: who to ring about this seat.
+      driverName: driver.name,
+      driverPhone: driverProfiles.phone,
     })
     .from(rideBookings)
     .innerJoin(transportRoutes, eq(rideBookings.routeId, transportRoutes.id))
     .leftJoin(users, eq(rideBookings.userId, users.id))
+    .leftJoin(driver, eq(transportRoutes.driverId, driver.id))
+    .leftJoin(driverProfiles, eq(transportRoutes.driverId, driverProfiles.userId))
     .where(conditions.length ? and(...conditions) : undefined)
     .orderBy(desc(rideBookings.createdAt));
 }
@@ -896,7 +890,7 @@ export async function publishTimetable(driverId: number, routeId: number, input:
   if (!isMonthKey(input.month)) fail("Choose a month.");
   const currentMonth = yangonMonthKey();
   if (input.month < currentMonth) fail("That month has already finished.");
-  if (input.month > addMonths(currentMonth, 11)) fail("Publish a timetable up to a year ahead.");
+  if (input.month > addMonths(currentMonth, MONTHS_PUBLISHABLE - 1)) fail("Publish a timetable up to two years ahead.");
 
   const times = Array.from(new Set(input.times.map(time => time.trim()))).sort();
   if (!times.length) fail("Add at least one departure time.");

@@ -292,6 +292,8 @@ export type RouteRow = {
     status: "active" | "inactive";
   };
   driverName: string | null;
+  /** The agent's phone number — the student pays them outside the app. */
+  driverPhone: string | null;
   vehiclePlate: string | null;
   vehicleSeats: number | null;
   vehicleStatus: string | null;
@@ -335,6 +337,9 @@ export type SeatRow = {
   route: RouteRow["route"] | null;
   passengerName: string | null;
   passengerUsername: string | null;
+  /** Who to ring about this seat, and on what number. */
+  driverName: string | null;
+  driverPhone: string | null;
 };
 
 /** How one road stands in one month: seats sold, seats left, my own seat. */

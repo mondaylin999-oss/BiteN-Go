@@ -2,9 +2,13 @@
 //  student/FerryTracking.tsx — the ferry, sold by the month.
 //
 //  ONE CARD PER ROAD. A seat is taken for a whole calendar month, not for a
-//  single departure: pick the month, ask for the seat, and once the transport
-//  agent accepts it the fare leaves your wallet once and the seat is yours on
-//  every departure of that month.
+//  single departure: pick the month, ask for the seat, ring the agent on the
+//  number shown and send them the fare the way you always do. The agent then
+//  accepts, and the seat is yours on every departure of that month.
+//
+//  NO MONEY PASSES THROUGH THIS APP for the ferry. The wallet here is the
+//  canteen wallet; the ferry fare goes straight from the student to the agent
+//  outside it, so nobody's balance is touched by a seat.
 //
 //  The card shows, for the month you picked: the daily times the bus runs,
 //  how many seats are left, what the month costs, and your own seat if you
@@ -12,7 +16,7 @@
 // ===========================================================================
 
 import { useState } from "react";
-import { Bus, Clock, MapPin, Minus, Plus, Users } from "lucide-react";
+import { Bus, Clock, MapPin, Minus, Phone, Plus, Users } from "lucide-react";
 import { api, ApiError, type RoadMonthRow, type RoadRow } from "@/lib/api";
 import { useApiData } from "@/hooks/useApiData";
 import { kyats, monthName } from "@/lib/format";
@@ -40,7 +44,7 @@ export default function FerryTracking() {
       });
       setMessage({
         tone: "ferry",
-        text: `Asked for a seat on ${road.route.name} for ${monthName(response.month)} — ${kyats(response.fareCents)}. ${road.driverName ?? "The transport agent"} has to accept it, and the fare leaves your wallet only then.`,
+        text: `Asked for a seat on ${road.route.name} for ${monthName(response.month)} — ${kyats(response.fareCents)}. Now ring ${road.driverName ?? "the transport agent"}${road.driverPhone ? ` on ${road.driverPhone}` : ""} and send the fare; they accept the seat once they have it.`,
       });
       await refresh();
     } catch (caught) {
@@ -55,7 +59,7 @@ export default function FerryTracking() {
     setMessage(null);
     try {
       await api.delete(`/transport/seats/${passId}`);
-      setMessage({ tone: "ferry", text: "Seat given up. If the month had not started yet, the fare is back in your wallet." });
+      setMessage({ tone: "ferry", text: "Seat given up. Anything you already sent the agent is between the two of you — the app never held it." });
       await refresh();
     } catch (caught) {
       setMessage({ tone: "error", text: caught instanceof ApiError ? caught.message : "Could not give up that seat." });
@@ -68,7 +72,9 @@ export default function FerryTracking() {
   if (error) return <ErrorNote message={error} onRetry={() => void refresh()} />;
 
   const roads = data?.roads ?? [];
-  const monthsOnSale = data?.months ?? [];
+  // The months on offer are whatever the agents have published, so the tile
+  // names the nearest one rather than assuming "this month".
+  const nearestMonth = roads.flatMap(road => road.months.map(month => month.month)).sort()[0] ?? "";
   const mySeats = roads.flatMap(road => road.months.filter(month => month.ownPass)).length;
   const seatsFree = roads.reduce((sum, road) => sum + (road.months[0]?.availableSeats ?? 0), 0);
 
@@ -82,7 +88,7 @@ export default function FerryTracking() {
       <div className="grid gap-stack-md sm:grid-cols-3">
         <StatTile label="Ferry roads" value={roads.length} tone="ferry" icon={<Bus className="h-4 w-4" />} />
         <StatTile
-          label={`Seats free · ${monthName(monthsOnSale[0] ?? "")}`}
+          label={nearestMonth ? `Seats free · ${monthName(nearestMonth)}` : "Seats free"}
           value={seatsFree}
           tone="ferry"
           icon={<Users className="h-4 w-4" />}
@@ -170,6 +176,20 @@ export default function FerryTracking() {
                     </div>
 
                     <div className="flex flex-wrap items-center gap-2 text-[13px] text-on-surface-variant">
+                      <Phone className="h-4 w-4 text-tertiary" />
+                      {road.driverPhone ? (
+                        <span>
+                          Pay {road.driverName ?? "the agent"} directly —{" "}
+                          <a className="tabular font-semibold text-tertiary underline" href={`tel:${road.driverPhone.replace(/\s+/g, "")}`}>
+                            {road.driverPhone}
+                          </a>
+                        </span>
+                      ) : (
+                        <span>{road.driverName ?? "The agent"} has not put a phone number up yet — ask at the office.</span>
+                      )}
+                    </div>
+
+                    <div className="flex flex-wrap items-center gap-2 text-[13px] text-on-surface-variant">
                       <Clock className="h-4 w-4 text-tertiary" />
                       {times.length ? (
                         <span className="tabular">Runs every day at {times.join(" · ")}</span>
@@ -186,7 +206,7 @@ export default function FerryTracking() {
                           </p>
                           <p className="text-[12px] text-on-tertiary-container/80">
                             {own.status === "pending"
-                              ? "Waiting for the transport agent to accept. Nothing has left your wallet yet."
+                              ? `Ring ${road.driverName ?? "the agent"}${road.driverPhone ? ` on ${road.driverPhone}` : ""} and send the fare — they accept the seat once they have it.`
                               : "Accepted — the seat is yours every day this month."}
                           </p>
                         </div>

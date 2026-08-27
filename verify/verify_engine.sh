@@ -7,11 +7,15 @@
 # ===========================================================================
 set -e
 cd "$(dirname "$0")/.."
-ENGINE=backend/cpp/build/biten_engine
-[ -x "$ENGINE" ] || ENGINE=backend/cpp/build/biten_engine.exe
-
 echo "== 1. build + unit tests ================================================"
 bash backend/cpp/build.sh
+
+# Only now does the binary exist. Resolving this before the build meant a fresh
+# copy of the project always fell through to the Windows name and then failed
+# with "No such file or directory" at step 2.
+ENGINE=backend/cpp/build/biten_engine
+[ -x "$ENGINE" ] || ENGINE=backend/cpp/build/biten_engine.exe
+[ -x "$ENGINE" ] || { echo "The engine did not build — see the output above." >&2; exit 1; }
 
 echo
 echo "== 2. CLI round trips ==================================================="

@@ -109,6 +109,15 @@ export default function FerryConsole() {
 
       {message ? <Notice tone={message.tone}>{message.text}</Notice> : null}
 
+      {/* Students pay the agent directly, so a missing phone number means
+          nobody can pay — worth saying loudly. */}
+      {!dashboard.profile?.profile.phone ? (
+        <Notice tone="warning">
+          Put your phone number on your Profile. Students ring it to send you the monthly fare — without it they cannot pay you, and the
+          seat requests will just sit here waiting.
+        </Notice>
+      ) : null}
+
       {/* ---------- register the bus, if there is none yet ---------- */}
       {!vehicle ? (
         <Card title="Register your ferry bus" subtitle="One bus per agent. Everything else — roads, timetables, seats — hangs off it." accent="ferry">
@@ -151,7 +160,7 @@ export default function FerryConsole() {
       ) : null}
 
       {/* ---------- monthly seat requests ---------- */}
-      <Card title="Seat requests" subtitle="A request holds no seat until you accept it. Accepting takes the month's fare from the student's wallet." accent="ferry">
+      <Card title="Seat requests" subtitle="A request holds no seat until you accept it. Take the fare from the student yourself — by phone, the way you always do — then accept." accent="ferry">
         {dashboard.pendingBookings.length === 0 ? (
           <EmptyState title="Nothing waiting" description="New requests appear here within 20 seconds." />
         ) : (
@@ -251,14 +260,15 @@ export default function FerryConsole() {
                   ))}
                 </Select>
               </Field>
-              <Field label="Month">
-                <Select value={table.month || data.months[0]} onChange={event => setTable({ ...table, month: event.target.value })} required>
-                  {data.months.map(month => (
-                    <option key={month} value={month}>
-                      {monthName(month)}
-                    </option>
-                  ))}
-                </Select>
+              <Field label="Month" hint="Any month from this one onwards — type it or use the picker.">
+                <Input
+                  type="month"
+                  min={data.months[0]}
+                  max={data.months[data.months.length - 1]}
+                  value={table.month || data.months[0]}
+                  onChange={event => setTable({ ...table, month: event.target.value })}
+                  required
+                />
               </Field>
             </div>
             <Field label="Departure times each day" hint="Up to six, separated by commas — for example 05:05, 16:30.">

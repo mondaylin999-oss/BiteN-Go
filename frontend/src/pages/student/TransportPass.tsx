@@ -2,10 +2,11 @@
 //  student/TransportPass.tsx — the monthly ferry passes.
 //
 //  An accepted seat prints as a pass for the whole month, with a code built
-//  from the seat id; one still waiting shows as awaiting the transport agent.
+//  from the seat id; one still waiting shows the agent's phone number, because
+//  the fare is sent to them outside this app — the app never holds it.
 // ===========================================================================
 
-import { Bus, Ticket } from "lucide-react";
+import { Bus, Phone, Ticket } from "lucide-react";
 import { api, type SeatRow } from "@/lib/api";
 import { useApiData } from "@/hooks/useApiData";
 import { kyats, monthName } from "@/lib/format";
@@ -36,12 +37,19 @@ export default function TransportPass() {
 
   return (
     <>
-      <PageHeader title="Ferry Pass" subtitle="One pass per month. Show it to the transport agent when you board — it is good for every departure of that month." />
+      <PageHeader
+        title="Ferry Pass"
+        subtitle="One pass per month, good for every departure of that month. The fare goes straight to the transport agent — ring the number on the pass."
+      />
 
       <div className="grid gap-stack-md sm:grid-cols-3">
         <StatTile label="Confirmed" value={confirmed.length} tone="ferry" icon={<Ticket className="h-4 w-4" />} hint={`${seats} seat(s) held`} />
         <StatTile label="Waiting" value={pending.length} tone="warning" hint="The transport agent has not accepted these yet" />
-        <StatTile label="Paid" value={kyats(confirmed.reduce((sum, row) => sum + row.pass.fareCents, 0))} hint="Across the months you hold" />
+        <StatTile
+          label="Agreed with the agent"
+          value={kyats(confirmed.reduce((sum, row) => sum + row.pass.fareCents, 0))}
+          hint="Paid to the agent directly, not through the app"
+        />
       </div>
 
       {passes.length === 0 ? (
@@ -64,6 +72,18 @@ export default function TransportPass() {
                   <p className="tabular text-[13px] text-on-surface-variant">
                     Pass BG-{String(row.pass.id).padStart(5, "0")} · {row.pass.seatCount} seat{row.pass.seatCount === 1 ? "" : "s"}
                   </p>
+                  {row.pass.status === "pending" ? (
+                    <p className="flex flex-wrap items-center gap-1 text-[12px] text-on-surface-variant">
+                      <Phone className="h-3.5 w-3.5 text-tertiary" />
+                      Send {row.driverName ?? "the agent"} the fare
+                      {row.driverPhone ? (
+                        <a className="tabular font-semibold text-tertiary underline" href={`tel:${row.driverPhone.replace(/\s+/g, "")}`}>
+                          {row.driverPhone}
+                        </a>
+                      ) : null}
+                      , then they accept this pass.
+                    </p>
+                  ) : null}
                   <div className="flex flex-wrap items-center gap-2 pt-1">
                     <Badge tone="ferry">{kyats(row.pass.fareCents)} for the month</Badge>
                     <Badge tone="neutral">
