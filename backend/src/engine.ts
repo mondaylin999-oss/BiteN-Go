@@ -140,12 +140,22 @@ export type EngineCommand =
   | "ferry.canRequest"
   | "ferry.canConfirm"
   | "ferry.capacityFloor"
+  | "ferry.planMonth"
+  | "ferry.canRequestMonth"
+  | "ferry.canAcceptMonth"
+  | "ferry.monthCapacityFloor"
   | "kds.board"
   | "kds.canAdvance";
 
 type Row = Record<string, any>;
 
 const asList = (value: unknown): Row[] => (Array.isArray(value) ? (value as Row[]) : []);
+
+/** Seats held on one road, in one month, with one status. */
+const passSeats = (passes: Row[], routeId: unknown, month: unknown, status: string) =>
+  passes
+    .filter(pass => Number(pass.routeId) === Number(routeId) && pass.month === month && pass.status === status)
+    .reduce((sum, pass) => sum + Number(pass.seatCount ?? 1), 0);
 const monthKey = (occurredAt: string) => (occurredAt ?? "").slice(0, 7) || "0000-00";
 
 function fallback<T>(command: EngineCommand, payload: Record<string, any>): T {
@@ -376,6 +386,80 @@ function fallback<T>(command: EngineCommand, payload: Record<string, any>): T {
       const committedSeats = asList(payload.trips)
         .filter(trip => Number(trip.vehicleId) === Number(payload.vehicleId) && ["scheduled", "boarding", "in_progress"].includes(trip.status))
         .reduce((sum, trip) => sum + seatsWithStatus(bookings, trip.tripId, "confirmed"), 0);
+      return { committedSeats } as T;
+    }
+
+    // ---- the ferry sold by the month -------------------------------------
+    // Twin of cpp/src/MonthlyPassPlanner.cpp. A pending request holds no seat;
+    // each calendar month is counted on its own.
+
+    case "ferry.planMonth": {
+      const passes = asList(payload.passes);
+      const roads = asList(payload.roads).map(road => {
+        const occupiedSeats = passSeats(passes, road.routeId, road.month, "confirmed");
+        const pendingSeats = passSeats(passes, road.routeId, road.month, "pending");
+        const availableSeats = Math.max(0, Number(road.totalSeats) - occupiedSeats);
+        return {
+          routeId: Number(road.routeId),
+          month: String(road.month ?? ""),
+          totalSeats: Number(road.totalSeats),
+          occupiedSeats,
+          pendingSeats,
+          availableSeats,
+          loadPercent: Number(road.totalSeats) ? (occupiedSeats * 100) / Number(road.totalSeats) : 0,
+          sellable: road.routeStatus === "active" && road.vehicleStatus === "operational" && availableSeats > 0,
+        };
+      });
+      return { roads } as T;
+    }
+
+    case "ferry.canRequestMonth": {
+      const road = payload.road as Row;
+      const passes = asList(payload.passes);
+      const seatCount = Number(payload.seatCount ?? 1);
+      const currentMonth = String(payload.currentMonth ?? "");
+      const fareCents = Number(road.monthlyFareCents) * Math.max(0, seatCount);
+      const occupied = passSeats(passes, road.routeId, road.month, "confirmed");
+      const availableSeats = Math.max(0, Number(road.totalSeats) - occupied);
+      const no = (reason: string) => ({ allowed: false, reason, fareCents, availableSeats }) as T;
+
+      if (seatCount < 1 || seatCount > 8) return no("Ask for between 1 and 8 seats.");
+      if (String(road.month ?? "").length !== 7) return no("Choose a month.");
+      if (currentMonth && String(road.month) < currentMonth) return no("That month has already finished.");
+      if (road.routeStatus !== "active") return no("This road is not running at the moment.");
+      if (road.vehicleStatus !== "operational") return no("The ferry bus on this road is not in service.");
+      if (
+        passes.some(
+          pass =>
+            Number(pass.routeId) === Number(road.routeId) &&
+            Number(pass.userId) === Number(payload.userId) &&
+            pass.month === road.month &&
+            ["pending", "confirmed"].includes(pass.status),
+        )
+      )
+        return no("You already have a seat on this road for that month.");
+      if (availableSeats <= 0) return no("Every seat on this road is taken for that month.");
+      if (seatCount > availableSeats) return no("That is more seats than are left for that month.");
+      return { allowed: true, reason: "ok", fareCents, availableSeats } as T;
+    }
+
+    case "ferry.canAcceptMonth": {
+      const road = payload.road as Row;
+      const passes = asList(payload.passes);
+      const pass = passes.find(candidate => Number(candidate.id) === Number(payload.passId));
+      if (!pass) return { allowed: false, reason: "That request no longer exists.", fareCents: 0, availableSeats: 0 } as T;
+      if (pass.status !== "pending") return { allowed: false, reason: "Only a waiting request can be accepted.", fareCents: 0, availableSeats: 0 } as T;
+      const occupied = passSeats(passes, road.routeId, pass.month, "confirmed");
+      const availableSeats = Math.max(0, Number(road.totalSeats) - occupied);
+      const fareCents = Number(road.monthlyFareCents) * Number(pass.seatCount);
+      if (Number(pass.seatCount) > availableSeats)
+        return { allowed: false, reason: "Accepting this would put more students on the bus than it has seats.", fareCents, availableSeats } as T;
+      return { allowed: true, reason: "ok", fareCents, availableSeats } as T;
+    }
+
+    case "ferry.monthCapacityFloor": {
+      const passes = asList(payload.passes).filter(pass => Number(pass.routeId) === Number(payload.routeId) && pass.status === "confirmed");
+      const committedSeats = passes.reduce((worst, pass) => Math.max(worst, passSeats(passes, payload.routeId, pass.month, "confirmed")), 0);
       return { committedSeats } as T;
     }
 

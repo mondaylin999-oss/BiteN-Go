@@ -21,6 +21,7 @@ set(CMAKE_RUNTIME_OUTPUT_DIRECTORY_RELEASE ${CMAKE_BINARY_DIR})
 add_library(biten_core
   src/FerryBusManagementService.cpp
   src/SeatPlanner.cpp
+  src/MonthlyPassPlanner.cpp
   src/CanteenService.cpp
   src/CashflowEngine.cpp
   src/KitchenBoard.cpp

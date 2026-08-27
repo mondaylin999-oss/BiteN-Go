@@ -222,6 +222,8 @@ export const rideBookings = pgTable(
     routeId: integer("route_id").notNull(),
     tripId: integer("trip_id"),
     userId: integer("user_id").notNull(),
+    /** The calendar month this seat is for, 'YYYY-MM' (Myanmar time). */
+    month: varchar("month", { length: 7 }).notNull(),
     seatCount: integer("seat_count").notNull().default(1),
     seatNumber: varchar("seat_number", { length: 16 }),
     fareCents: integer("fare_cents").notNull(),
@@ -229,7 +231,29 @@ export const rideBookings = pgTable(
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
   },
-  table => [index("ride_bookings_trip_idx").on(table.tripId, table.status), index("ride_bookings_user_idx").on(table.userId)],
+  table => [
+    index("ride_bookings_trip_idx").on(table.tripId, table.status),
+    index("ride_bookings_user_idx").on(table.userId),
+    index("ride_bookings_month_idx").on(table.routeId, table.month, table.status),
+  ],
+);
+
+/**
+ * The daily timetable a road runs to for one month. Publishing one creates the
+ * `trips` rows for every day of that month.
+ */
+export const routeTimetables = pgTable(
+  "route_timetables",
+  {
+    id: serial("id").primaryKey(),
+    routeId: integer("route_id").notNull(),
+    month: varchar("month", { length: 7 }).notNull(),
+    /** 'HH:MM,HH:MM' in Myanmar time, in order. */
+    times: text("times").notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  table => [uniqueIndex("route_timetables_route_month_unique").on(table.routeId, table.month)],
 );
 
 export const transportPayments = pgTable(

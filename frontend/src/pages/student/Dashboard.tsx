@@ -48,7 +48,7 @@ export default function StudentDashboard() {
       }, new Map<number, (typeof data.trips)[number]>())
       .values(),
   ).sort((left, right) => new Date(left.trip.departureAt).getTime() - new Date(right.trip.departureAt).getTime());
-  const myBookings = data.trips.filter(trip => trip.ownBooking);
+  const mySeats = data.trips.filter(trip => trip.ownPass).length;
 
   return (
     <>
@@ -68,7 +68,7 @@ export default function StudentDashboard() {
           icon={<Bus className="h-4 w-4" />}
           hint={nextTrip ? `${nextTrip.route.name} · ${relative(nextTrip.trip.departureAt)}` : "No upcoming trip"}
         />
-        <StatTile label="My seats" value={myBookings.length} tone="ferry" icon={<Clock className="h-4 w-4" />} hint="Requested or confirmed" />
+        <StatTile label="Ferry seats" value={mySeats} tone="ferry" icon={<Clock className="h-4 w-4" />} hint="Departures covered by your monthly seat" />
       </div>
 
       <div className="grid gap-stack-md lg:grid-cols-2">
@@ -134,7 +134,7 @@ export default function StudentDashboard() {
                   <LoadBar percent={trip.loadPercent} />
                   <p className="tabular text-[12px] text-on-surface-variant">
                     {trip.availableSeats} of {trip.vehicle.totalSeats} seats free
-                    {trip.ownBooking ? ` · your request is ${trip.ownBooking.status}` : ""}
+                    {trip.ownPass ? ` · your seat this month is ${trip.ownPass.status === "confirmed" ? "accepted" : "waiting"}` : ""}
                   </p>
                 </li>
               ))}

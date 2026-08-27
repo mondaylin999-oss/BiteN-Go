@@ -67,8 +67,8 @@ export default function Profile() {
       <div className="grid gap-stack-md sm:grid-cols-2 lg:grid-cols-4">
         <StatTile label="Signed in as" value={user.name ?? user.username ?? "—"} hint={`@${user.username ?? "—"}`} icon={<ShieldCheck className="h-4 w-4" />} />
         <StatTile label="Role" value={ROLE_LABEL[user.role]} tone={user.role === "driver" ? "ferry" : "canteen"} />
-        <StatTile label="Rules engine" value={health?.engine === "c++" ? "C++" : "TypeScript"} icon={<Cpu className="h-4 w-4" />} hint={health?.engine === "c++" ? "Compiled engine is live" : "Run cpp/build.sh to use C++"} />
-        <StatTile label="Database" value={health?.postgres?.replace("PostgreSQL ", "PG ") ?? "—"} icon={<Database className="h-4 w-4" />} hint={health?.database} />
+        <StatTile label="System" value={health ? "Ready" : "Not answering"} icon={<Cpu className="h-4 w-4" />} hint={health?.myanmarTime ? `${health.myanmarTime} Yangon` : undefined} />
+        <StatTile label="Records" value={health?.database?.startsWith("connected") ? "Saved" : "Unavailable"} icon={<Database className="h-4 w-4" />} hint="Everything you do is written to the campus records" />
       </div>
 
       {message ? <Notice tone={message.tone}>{message.text}</Notice> : null}

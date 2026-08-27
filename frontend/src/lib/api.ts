@@ -310,28 +310,54 @@ export type TripRow = {
   availableSeats: number;
   loadPercent: number;
   bookable: boolean;
-  ownBooking: BookingRecord | null;
+  /** The seat this student holds for the month this departure falls in. */
+  ownPass: SeatRecord | null;
 };
 
-export type BookingRecord = {
+/** One student's seat on one road for one whole month. */
+export type SeatRecord = {
   id: number;
   routeId: number;
   tripId: number | null;
   userId: number;
+  /** "YYYY-MM" */
+  month: string;
   seatCount: number;
   seatNumber: string | null;
+  /** What the month costs, in kyat. */
   fareCents: number;
   status: "pending" | "confirmed" | "cancelled";
   createdAt: string;
 };
 
-export type BookingRow = {
-  booking: BookingRecord;
-  trip: { id: number; departureAt: string; status: string } | null;
+export type SeatRow = {
+  pass: SeatRecord;
   route: RouteRow["route"] | null;
   passengerName: string | null;
   passengerUsername: string | null;
 };
+
+/** How one road stands in one month: seats sold, seats left, my own seat. */
+export type RoadMonthRow = {
+  month: string;
+  totalSeats: number;
+  occupiedSeats: number;
+  pendingSeats: number;
+  availableSeats: number;
+  loadPercent: number;
+  sellable: boolean;
+  /** "05:05,16:30" — the daily times published for that month. */
+  timetable: string;
+  ownPass: SeatRecord | null;
+};
+
+/** A road, with every month currently on sale. */
+export type RoadRow = RouteRow & {
+  vehicle: { id: number; plateNumber: string | null; totalSeats: number; status: string; monthlyFeeCents: number } | null;
+  months: RoadMonthRow[];
+};
+
+export type TimetableRow = { id: number; routeId: number; month: string; times: string };
 
 export type FlowSummary = {
   received: number;
@@ -413,7 +439,7 @@ export type DriverDashboard = {
   vehicle: VehicleRow | null;
   routes: RouteRow[];
   trips: TripRow[];
-  pendingBookings: BookingRow[];
+  pendingBookings: SeatRow[];
   confirmedBookings: number;
   maintenance: MaintenanceRow[];
 };

@@ -12,7 +12,7 @@ import { api, ApiError, type DriverDashboard, type RouteRow } from "@/lib/api";
 import { useApiData } from "@/hooks/useApiData";
 import { kyats } from "@/lib/format";
 import { RouteMap } from "@/components/RouteMap";
-import { Button, Card, EmptyState, ErrorNote, Field, Input, Notice, PageHeader, Spinner } from "@/components/ui";
+import { Button, Card, ErrorNote, Field, Input, Notice, PageHeader, Spinner } from "@/components/ui";
 
 type NodeDraft = { name: string; latitude: string; longitude: string };
 
@@ -33,6 +33,7 @@ export default function RouteEditor() {
   // Filled in by the map: the real driving distance and time OSRM reports
   // for the published stops. Saved with the route so nobody has to guess.
   const [road, setRoad] = useState<{ km: number; minutes: number } | null>(null);
+  const [newRoad, setNewRoad] = useState({ name: "", startPoint: "", destination: "", stops: "", fareCents: "45000" });
 
   const routes: RouteRow[] = data?.routes ?? [];
   const selected = routes.find(row => row.route.id === selectedId) ?? routes[0] ?? null;
@@ -110,11 +111,64 @@ export default function RouteEditor() {
   if (loading) return <Spinner label="Loading your routes…" />;
   if (error) return <ErrorNote message={error} onRetry={() => void refresh()} />;
 
+  // The office only opens accounts, so an agent with no road opens their own.
   if (!selected)
     return (
       <>
-        <PageHeader title="Route & Map" />
-        <EmptyState title="No route assigned" description="The administrator assigns a route to your ferry bus; it then becomes editable here." />
+        <PageHeader title="Road & Map" subtitle="Open the road your ferry bus runs. You can draw its line on the map straight afterwards." />
+        <Card title="Open my road" accent="ferry">
+          <form
+            className="grid gap-4 sm:grid-cols-2"
+            onSubmit={(event: FormEvent) => {
+              event.preventDefault();
+              setBusy(true);
+              setMessage(null);
+              api
+                .post("/transport/driver/routes", {
+                  name: newRoad.name.trim(),
+                  startPoint: newRoad.startPoint.trim(),
+                  destination: newRoad.destination.trim(),
+                  stops: newRoad.stops
+                    .split(",")
+                    .map(stop => stop.trim())
+                    .filter(Boolean),
+                  fareCents: Math.round(Number(newRoad.fareCents)),
+                })
+                .then(() => refresh())
+                .catch(caught => setMessage({ tone: "error", text: caught instanceof ApiError ? caught.message : "Could not open the road." }))
+                .finally(() => setBusy(false));
+            }}
+          >
+            {message ? (
+              <div className="sm:col-span-2">
+                <Notice tone={message.tone}>{message.text}</Notice>
+              </div>
+            ) : null}
+            <Field label="Road name">
+              <Input value={newRoad.name} onChange={event => setNewRoad({ ...newRoad, name: event.target.value })} required minLength={2} placeholder="North Hall Ferry" />
+            </Field>
+            <Field label="Price of one seat for a month (kyat)">
+              <Input type="number" min={1} step={1} value={newRoad.fareCents} onChange={event => setNewRoad({ ...newRoad, fareCents: event.target.value })} required placeholder="45000" />
+            </Field>
+            <Field label="Start point">
+              <Input value={newRoad.startPoint} onChange={event => setNewRoad({ ...newRoad, startPoint: event.target.value })} required minLength={2} placeholder="Main Gate" />
+            </Field>
+            <Field label="Destination">
+              <Input value={newRoad.destination} onChange={event => setNewRoad({ ...newRoad, destination: event.target.value })} required minLength={2} placeholder="North Hall" />
+            </Field>
+            <div className="sm:col-span-2">
+              <Field label="Pickup stops" hint="Separate with commas — they appear in order.">
+                <Input value={newRoad.stops} onChange={event => setNewRoad({ ...newRoad, stops: event.target.value })} required placeholder="Library, Science Block, Sports Field" />
+              </Field>
+            </div>
+            <div className="sm:col-span-2">
+              <Button type="submit" variant="ferry" busy={busy}>
+                <Plus className="h-4 w-4" /> Open the road
+              </Button>
+              <p className="mt-2 text-[12px] text-on-surface-variant">Register your ferry bus first if you have not — a road needs a bus to carry it.</p>
+            </div>
+          </form>
+        </Card>
       </>
     );
 
@@ -125,8 +179,8 @@ export default function RouteEditor() {
   return (
     <>
       <PageHeader
-        title="Route & Map"
-        subtitle="Only the routes assigned to your ferry bus can be edited."
+        title="Road & Map"
+        subtitle="Your road: the stops, the monthly price of a seat, and the line students see on the map."
         actions={
           routes.length > 1 ? (
             <select className="input h-9 w-[220px]" value={selected.route.id} onChange={event => setSelectedId(Number(event.target.value))}>
@@ -160,7 +214,7 @@ export default function RouteEditor() {
               <Input value={stops} onChange={event => setStops(event.target.value)} required placeholder="Library, Science Block, Sports Field" />
             </Field>
             <div className="grid gap-4 sm:grid-cols-2">
-              <Field label="Fare per seat (kyat)" hint={`Now ${kyats(selected.route.fareCents)}`}>
+              <Field label="One seat for a month (kyat)" hint={`Now ${kyats(selected.route.fareCents)} a month`}>
                 <Input type="number" min={1} step={1} value={fare} onChange={event => setFare(event.target.value)} required />
               </Field>
               <Field label="Extra map link (optional)" hint="Any https:// link. The map below needs no link at all.">

@@ -6,7 +6,7 @@
 
 import { useState, type FormEvent } from "react";
 import { useLocation } from "wouter";
-import { Bus, Cpu, ShieldCheck, UtensilsCrossed } from "lucide-react";
+import { Bus, ShieldCheck, UtensilsCrossed } from "lucide-react";
 import { useAuth, homePathFor } from "@/lib/auth";
 import { ApiError } from "@/lib/api";
 import { Button, ErrorNote, Field, Input } from "@/components/ui";
@@ -64,7 +64,7 @@ export default function Login() {
 
           <p className="mt-6 max-w-xl text-[16px] leading-relaxed text-on-surface-variant">
             Pre-order lunch before the kitchen closes its window, keep a campus wallet in kyat, and book a seat on the ferry bus —
-            all on one account, all stored in your own PostgreSQL database.
+            all on one account, all kept on your own computer.
           </p>
 
           <div className="mt-8 grid gap-3 sm:grid-cols-2">
@@ -76,18 +76,14 @@ export default function Login() {
             </div>
             <div className="card card-pad">
               <span className="chip bg-tertiary-container text-on-tertiary-container">Ferry</span>
-              <p className="mt-3 text-[14px] text-on-surface-variant">Live trips, seat requests the driver confirms, and a drawn route map.</p>
+              <p className="mt-3 text-[14px] text-on-surface-variant">A seat for the whole month, the daily timetable, and the road drawn on a real map.</p>
             </div>
           </div>
 
           <div className="mt-6 flex flex-wrap items-center gap-3 text-[13px] text-on-surface-variant">
             <span className="inline-flex items-center gap-2">
-              <Cpu className="h-4 w-4" />
-              Rules engine: <strong className="font-semibold text-on-surface">{health?.engine === "c++" ? "C++" : health ? "TypeScript fallback" : "checking…"}</strong>
-            </span>
-            <span className="inline-flex items-center gap-2">
               <ShieldCheck className="h-4 w-4" />
-              {health ? health.database : "server unreachable"}
+              {health ? "Server ready" : "Server not answering"}
             </span>
             {health?.myanmarTime ? (
               <span className="tabular inline-flex items-center gap-2">

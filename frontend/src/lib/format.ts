@@ -59,13 +59,6 @@ export function relative(value: string | Date | null | undefined) {
   return deltaMinutes > 0 ? `in ${label}` : `${label} ago`;
 }
 
-export function monthName(month: string) {
-  const parsed = new Date(`${month}-01T00:00:00`);
-  return Number.isNaN(parsed.getTime())
-    ? month
-    : parsed.toLocaleDateString("en-GB", { month: "long", year: "numeric" });
-}
-
 export function titleCase(value: string) {
   return value.replace(/_/g, " ").replace(/\b\w/g, character => character.toUpperCase());
 }
@@ -77,4 +70,18 @@ export function initials(name: string | null | undefined) {
     .slice(0, 2)
     .map(part => part[0]?.toUpperCase() ?? "")
     .join("");
+}
+
+/** "2026-09" -> "September 2026". */
+export function monthName(month: string | null | undefined) {
+  if (!month || !/^\d{4}-\d{2}$/.test(month)) return "—";
+  const [year, index] = month.split("-").map(Number);
+  return new Date(Date.UTC(year!, index! - 1, 1)).toLocaleDateString("en-GB", { month: "long", year: "numeric", timeZone: "UTC" });
+}
+
+/** "2026-09" -> "Sep 2026", for tables and chips. */
+export function monthShort(month: string | null | undefined) {
+  if (!month || !/^\d{4}-\d{2}$/.test(month)) return "—";
+  const [year, index] = month.split("-").map(Number);
+  return new Date(Date.UTC(year!, index! - 1, 1)).toLocaleDateString("en-GB", { month: "short", year: "numeric", timeZone: "UTC" });
 }

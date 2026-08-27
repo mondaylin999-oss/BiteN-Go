@@ -13,6 +13,7 @@
 #include "Json.hpp"
 #include "KitchenBoard.hpp"
 #include "SeatPlanner.hpp"
+#include "MonthlyPassPlanner.hpp"
 
 #include <cmath>
 #include <cstdlib>
@@ -265,6 +266,75 @@ void testFerryDomain() {
   CHECK(refusedHttp);
 }
 
+// ---------------------------------------------------------------------------
+// The ferry sold by the month
+// ---------------------------------------------------------------------------
+void testMonthlyPasses() {
+  using namespace ferrypass;
+
+  RoadMonth road;
+  road.routeId = 1;
+  road.vehicleId = 1;
+  road.driverId = 9;
+  road.totalSeats = 3;
+  road.monthlyFareCents = 45000;
+  road.month = "2026-09";
+  road.routeStatus = "active";
+  road.vehicleStatus = "operational";
+
+  std::vector<PassRow> passes = {
+      {1, 1, 101, 2, "2026-09", "confirmed"},
+      {2, 1, 102, 1, "2026-09", "pending"},
+      {3, 1, 103, 3, "2026-10", "confirmed"},
+      {4, 1, 104, 5, "2026-09", "cancelled"},
+  };
+
+  // A pending request holds no seat: 3 seats minus the 2 confirmed = 1 free.
+  const auto plan = MonthlyPassPlanner::plan({road}, passes);
+  CHECK(plan.size() == 1);
+  CHECK(plan[0].occupiedSeats == 2);
+  CHECK(plan[0].pendingSeats == 1);
+  CHECK(plan[0].availableSeats == 1);
+  CHECK(plan[0].sellable);
+
+  // A month is counted on its own — October's 3 seats do not fill September.
+  RoadMonth october = road;
+  october.month = "2026-10";
+  const auto octoberPlan = MonthlyPassPlanner::plan({october}, passes);
+  CHECK(octoberPlan[0].occupiedSeats == 3);
+  CHECK(octoberPlan[0].availableSeats == 0);
+  CHECK(!octoberPlan[0].sellable);
+
+  // A finished month cannot be sold.
+  CHECK(!MonthlyPassPlanner::canRequest(road, passes, 200, 1, "2026-10").allowed);
+  // The same student cannot hold two seats on one road in one month.
+  CHECK(!MonthlyPassPlanner::canRequest(road, passes, 101, 1, "2026-08").allowed);
+  // More seats than are left is refused; exactly what is left is allowed.
+  CHECK(!MonthlyPassPlanner::canRequest(road, passes, 200, 2, "2026-08").allowed);
+  const auto ok = MonthlyPassPlanner::canRequest(road, passes, 200, 1, "2026-08");
+  CHECK(ok.allowed);
+  CHECK(ok.fareCents == 45000);
+
+  // Two seats for two months costs two months of fare.
+  const auto pair = MonthlyPassPlanner::canRequest(road, {}, 200, 2, "2026-08");
+  CHECK(pair.allowed);
+  CHECK(pair.fareCents == 90000);
+
+  // Accepting is checked against the seats free in that pass's own month.
+  CHECK(MonthlyPassPlanner::canAccept(road, passes, 2).allowed);
+  CHECK(!MonthlyPassPlanner::canAccept(road, passes, 1).allowed);   // already accepted
+  CHECK(!MonthlyPassPlanner::canAccept(road, passes, 99).allowed);  // gone
+
+  // The bus may not shrink below the busiest month it is committed to.
+  CHECK(MonthlyPassPlanner::committedSeatsForRoute(1, passes) == 3);
+  CHECK(MonthlyPassPlanner::committedSeatsForRoute(2, passes) == 0);
+
+  // A bus in the workshop sells nothing.
+  RoadMonth broken = road;
+  broken.vehicleStatus = "maintenance";
+  CHECK(!MonthlyPassPlanner::canRequest(broken, {}, 200, 1, "2026-08").allowed);
+}
+
 }  // namespace
 
 int main() {
@@ -275,6 +345,7 @@ int main() {
   testSeatPlanner();
   testKitchenBoard();
   testFerryDomain();
+  testMonthlyPasses();
   std::cout << "All " << gChecks << " C++ engine checks passed.\n";
   return 0;
 }

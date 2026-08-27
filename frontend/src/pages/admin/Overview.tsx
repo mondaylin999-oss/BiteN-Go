@@ -73,7 +73,7 @@ export default function AdminOverview() {
 
   return (
     <>
-      <PageHeader title="Overview" subtitle="Everything the campus is doing right now, straight from PostgreSQL." />
+      <PageHeader title="Overview" subtitle="Everything the campus is doing right now." />
 
       <div className="grid gap-stack-md sm:grid-cols-2 lg:grid-cols-4">
         <StatTile label="Funded to agents" value={kyats(data.summary.received)} icon={<Banknote className="h-4 w-4" />} />

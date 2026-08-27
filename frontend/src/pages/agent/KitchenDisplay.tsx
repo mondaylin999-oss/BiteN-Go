@@ -142,7 +142,7 @@ export default function KitchenDisplay() {
     <>
       <PageHeader
         title="Kitchen Display"
-        subtitle="Ticket order is scored by the C++ engine: waiting time, unpaid cash and basket size. It refreshes every 15 seconds."
+        subtitle="Tickets are ordered by how long they have waited, whether the cash is still owed, and how big the order is. Refreshes every 15 seconds."
         actions={
           <Button variant="ghost" className="h-9" onClick={() => void refresh()}>
             Refresh now

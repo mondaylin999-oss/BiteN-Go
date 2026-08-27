@@ -223,11 +223,16 @@ CREATE TABLE IF NOT EXISTS trips (
 CREATE INDEX IF NOT EXISTS trips_driver_departure_idx ON trips (driver_id, departure_at);
 CREATE INDEX IF NOT EXISTS trips_route_departure_idx  ON trips (route_id, departure_at);
 
+-- A MONTHLY SEAT, not a seat on one departure.
+-- A student takes one seat on one road for a whole calendar month; the
+-- transport agent accepts it once and the monthly fare is charged once.
+-- `month` is the Myanmar calendar month as 'YYYY-MM'.
 CREATE TABLE IF NOT EXISTS ride_bookings (
   id          SERIAL PRIMARY KEY,
   route_id    INTEGER        NOT NULL REFERENCES transport_routes (id) ON DELETE CASCADE,
-  trip_id     INTEGER        REFERENCES trips (id) ON DELETE CASCADE,
+  trip_id     INTEGER        REFERENCES trips (id) ON DELETE CASCADE,  -- kept for history; monthly seats leave it NULL
   user_id     INTEGER        NOT NULL REFERENCES users (id) ON DELETE CASCADE,
+  month       VARCHAR(7)     NOT NULL,
   seat_count  INTEGER        NOT NULL DEFAULT 1 CHECK (seat_count > 0),
   seat_number VARCHAR(16),
   fare_cents  INTEGER        NOT NULL CHECK (fare_cents >= 0),
@@ -235,8 +240,26 @@ CREATE TABLE IF NOT EXISTS ride_bookings (
   created_at  TIMESTAMPTZ    NOT NULL DEFAULT now(),
   updated_at  TIMESTAMPTZ    NOT NULL DEFAULT now()
 );
-CREATE INDEX IF NOT EXISTS ride_bookings_trip_idx ON ride_bookings (trip_id, status);
-CREATE INDEX IF NOT EXISTS ride_bookings_user_idx ON ride_bookings (user_id, created_at DESC);
+CREATE INDEX IF NOT EXISTS ride_bookings_trip_idx  ON ride_bookings (trip_id, status);
+CREATE INDEX IF NOT EXISTS ride_bookings_user_idx  ON ride_bookings (user_id, created_at DESC);
+
+-- The two indexes that mention `month` are created further down, in the
+-- upgrade section. On a database made by an older version of this file the
+-- table already exists WITHOUT that column, and CREATE TABLE IF NOT EXISTS
+-- leaves it alone — so an index on `month` here would fail with
+-- 'column "month" does not exist' before the ALTER ever runs.
+
+-- The daily timetable a road runs to for one month. Publishing it creates the
+-- `trips` rows for every day of that month (see backend/src/transport.ts).
+CREATE TABLE IF NOT EXISTS route_timetables (
+  id         SERIAL PRIMARY KEY,
+  route_id   INTEGER     NOT NULL REFERENCES transport_routes (id) ON DELETE CASCADE,
+  month      VARCHAR(7)  NOT NULL,
+  times      TEXT        NOT NULL,  -- 'HH:MM,HH:MM' in Myanmar time, in order
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  CONSTRAINT route_timetables_route_month_unique UNIQUE (route_id, month)
+);
 
 CREATE TABLE IF NOT EXISTS transport_payments (
   id                      SERIAL PRIMARY KEY,
@@ -265,6 +288,34 @@ CREATE INDEX IF NOT EXISTS vehicle_maintenance_vehicle_idx ON vehicle_maintenanc
 -- 5. updated_at is maintained by the database, not by the application.
 --    (MySQL had ON UPDATE CURRENT_TIMESTAMP; in Postgres this is a trigger.)
 -- ---------------------------------------------------------------------------
+-- ---------------------------------------------------------------------------
+-- Upgrading a database created by an older version of this file.
+-- Everything above uses CREATE TABLE IF NOT EXISTS, which leaves an existing
+-- table exactly as it was — so the columns added for the monthly ferry are
+-- added here instead. All of this is safe to run on a fresh database too.
+-- ---------------------------------------------------------------------------
+ALTER TABLE ride_bookings ADD COLUMN IF NOT EXISTS month VARCHAR(7);
+UPDATE ride_bookings SET month = to_char(created_at, 'YYYY-MM') WHERE month IS NULL;
+ALTER TABLE ride_bookings ALTER COLUMN month SET NOT NULL;
+
+-- Old per-trip seats could give one student several live seats on the same
+-- road in the same month — they booked Monday's departure and Tuesday's. A
+-- monthly seat is one per student per road per month, so the extras are
+-- retired here (the earliest one is kept). Without this the unique index
+-- below would refuse to be created and the whole file would stop.
+WITH ranked AS (
+  SELECT id, row_number() OVER (PARTITION BY route_id, user_id, month ORDER BY id) AS position
+  FROM ride_bookings
+  WHERE status <> 'cancelled'
+)
+UPDATE ride_bookings SET status = 'cancelled'
+WHERE id IN (SELECT id FROM ranked WHERE position > 1);
+
+CREATE INDEX IF NOT EXISTS ride_bookings_month_idx ON ride_bookings (route_id, month, status);
+CREATE UNIQUE INDEX IF NOT EXISTS ride_bookings_one_per_month
+  ON ride_bookings (route_id, user_id, month)
+  WHERE status <> 'cancelled';
+
 CREATE OR REPLACE FUNCTION set_updated_at() RETURNS trigger AS $$
 BEGIN
   NEW.updated_at = now();
@@ -275,7 +326,7 @@ $$ LANGUAGE plpgsql;
 DO $$
 DECLARE t TEXT;
 BEGIN
-  FOREACH t IN ARRAY ARRAY['users', 'food_items', 'orders', 'vehicles', 'driver_profiles', 'transport_routes', 'trips', 'ride_bookings']
+  FOREACH t IN ARRAY ARRAY['users', 'food_items', 'orders', 'vehicles', 'driver_profiles', 'transport_routes', 'trips', 'ride_bookings', 'route_timetables']
   LOOP
     EXECUTE format('DROP TRIGGER IF EXISTS %I_set_updated_at ON %I', t, t);
     EXECUTE format('CREATE TRIGGER %I_set_updated_at BEFORE UPDATE ON %I FOR EACH ROW EXECUTE FUNCTION set_updated_at()', t, t);
@@ -288,5 +339,5 @@ COMMIT;
 -- Quick check — run this after the script finishes:
 --     SELECT table_name FROM information_schema.tables
 --      WHERE table_schema = 'public' ORDER BY table_name;
--- You should see 14 tables.
+-- You should see 15 tables.
 -- ---------------------------------------------------------------------------

@@ -17,7 +17,8 @@ import { nanoid } from "nanoid";
 import { assertSchemaInstalled, closeDatabase, db } from "./database.js";
 import { ENV } from "./env.js";
 import { hashPassword, isUsableHash } from "./auth.js";
-import { foodItems, transactions, transportRoutes, trips, users, vehicles, routeStops, routeMapNodes, driverProfiles } from "../drizzle/schema.js";
+import { foodItems, rideBookings, transactions, transportRoutes, trips, users, vehicles, routeStops, routeMapNodes, routeTimetables, driverProfiles } from "../drizzle/schema.js";
+import { addMonths, daysInMonth, yangonMonthKey, yangonWallClockToDate } from "./time.js";
 import { yangonDateKey, yangonHour } from "./time.js";
 
 type SeedAccount = { username: string; name: string; email: string; role: "admin" | "agent" | "user" | "driver" };
@@ -154,7 +155,8 @@ export async function seedDatabase({ quiet = false } = {}) {
         routeLineColor: "#0284C7",
         distanceKm: 7,
         estimatedMinutes: 25,
-        fareCents: 1500,
+        // The MONTHLY price of one seat on this road.
+        fareCents: 45_000,
         status: "active",
       })
       .returning({ id: transportRoutes.id });
@@ -182,14 +184,41 @@ export async function seedDatabase({ quiet = false } = {}) {
         { routeId, name: "North Hall", latitude: "16.851000", longitude: "96.163100", nodeOrder: 5 },
       ]);
 
-    const hour = 60 * 60 * 1000;
+    // The ferry runs to a timetable for the whole month: out in the morning,
+    // back in the afternoon, every day. Publishing a timetable is what creates
+    // the individual departures, so the seed does exactly what the transport
+    // agent's screen does.
+    const times = ["05:05", "16:30"];
+    const months = [yangonMonthKey(), addMonths(yangonMonthKey(), 1)];
+    const now = new Date();
+    const departures: Array<{ routeId: number; driverId: number; vehicleId: number; departureAt: Date }> = [];
+    for (const month of months) {
+      for (let day = 1; day <= daysInMonth(month); day += 1) {
+        for (const time of times) {
+          const departureAt = yangonWallClockToDate(month, day, time);
+          if (departureAt.getTime() > now.getTime()) departures.push({ routeId, driverId, vehicleId, departureAt });
+        }
+      }
+    }
+    if (departures.length) await db().insert(trips).values(departures);
     await db()
-      .insert(trips)
-      .values([
-        { routeId, driverId, vehicleId, departureAt: new Date(Date.now() + 3 * hour), status: "scheduled" },
-        { routeId, driverId, vehicleId, departureAt: new Date(Date.now() + 27 * hour), status: "scheduled" },
-      ]);
-    log("Ferry bus, route, map line and two upcoming trips added.");
+      .insert(routeTimetables)
+      .values(months.map(month => ({ routeId, month, times: times.join(",") })));
+
+    // One student has already asked for a seat next month, so the transport
+    // agent's screen has something waiting the first time they sign in.
+    await db()
+      .insert(rideBookings)
+      .values({
+        routeId,
+        userId: studentIds[0]!,
+        month: addMonths(yangonMonthKey(), 1),
+        seatCount: 1,
+        fareCents: 45_000,
+        status: "pending",
+      });
+
+    log(`Ferry bus, road, map line, ${departures.length} departures across ${months.length} months, and one waiting seat request added.`);
   }
 
   // --- opening money ------------------------------------------------------
@@ -202,8 +231,8 @@ export async function seedDatabase({ quiet = false } = {}) {
       .values([
         { createdById: adminId, agentId: agentIds[0]!, direction: "in", sourceRole: "admin", targetRole: "agent", amountCents: 1_280_000, note: "Opening allocation", occurredAt: new Date(now - 20 * day) },
         { createdById: adminId, agentId: agentIds[1]!, direction: "in", sourceRole: "admin", targetRole: "agent", amountCents: 740_000, note: "Opening allocation", occurredAt: new Date(now - 18 * day) },
-        { createdById: agentIds[0]!, agentId: agentIds[0]!, userId: studentIds[0]!, direction: "out", sourceRole: "agent", targetRole: "user", amountCents: 25_000, note: "Wallet top-up", occurredAt: new Date(now - 10 * day) },
-        { createdById: agentIds[0]!, agentId: agentIds[0]!, userId: studentIds[1]!, direction: "out", sourceRole: "agent", targetRole: "user", amountCents: 18_000, note: "Wallet top-up", occurredAt: new Date(now - 9 * day) },
+        { createdById: agentIds[0]!, agentId: agentIds[0]!, userId: studentIds[0]!, direction: "out", sourceRole: "agent", targetRole: "user", amountCents: 60_000, note: "Wallet top-up", occurredAt: new Date(now - 10 * day) },
+        { createdById: agentIds[0]!, agentId: agentIds[0]!, userId: studentIds[1]!, direction: "out", sourceRole: "agent", targetRole: "user", amountCents: 50_000, note: "Wallet top-up", occurredAt: new Date(now - 9 * day) },
         { createdById: agentIds[1]!, agentId: agentIds[1]!, userId: studentIds[2]!, direction: "out", sourceRole: "agent", targetRole: "user", amountCents: 12_000, note: "Wallet top-up", occurredAt: new Date(now - 5 * day) },
         { createdById: agentIds[1]!, agentId: agentIds[1]!, userId: studentIds[3]!, direction: "out", sourceRole: "agent", targetRole: "user", amountCents: 9_000, note: "Wallet top-up", occurredAt: new Date(now - 3 * day) },
       ]);

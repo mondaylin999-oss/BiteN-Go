@@ -13,9 +13,9 @@ import { useMemo, useState, type ReactNode } from "react";
 import { Link, useLocation } from "wouter";
 import {
   Bus,
+  Clock,
   ChefHat,
   ClipboardList,
-  Cpu,
   LayoutDashboard,
   LogOut,
   Map as MapIcon,
@@ -42,25 +42,25 @@ const NAV: Record<Role, NavItem[]> = {
     { href: "/student/canteen", label: "Canteen Menu", icon: <UtensilsCrossed className="h-5 w-5" />, context: "canteen" },
     { href: "/student/orders", label: "Meal Orders", icon: <Receipt className="h-5 w-5" />, context: "canteen" },
     { href: "/student/wallet", label: "Wallet", icon: <Wallet className="h-5 w-5" />, context: "canteen" },
-    { href: "/student/ferry", label: "Ferry Tracking", icon: <Bus className="h-5 w-5" />, context: "ferry" },
-    { href: "/student/passes", label: "Transport Pass", icon: <Ticket className="h-5 w-5" />, context: "ferry" },
+    { href: "/student/ferry", label: "Ferry", icon: <Bus className="h-5 w-5" />, context: "ferry" },
+    { href: "/student/passes", label: "My Ferry Pass", icon: <Ticket className="h-5 w-5" />, context: "ferry" },
     { href: "/profile", label: "Profile", icon: <UserIcon className="h-5 w-5" /> },
   ],
   agent: [
     { href: "/agent", label: "Kitchen Display", icon: <ChefHat className="h-5 w-5" />, context: "canteen" },
     { href: "/agent/menu", label: "Menu Board", icon: <UtensilsCrossed className="h-5 w-5" />, context: "canteen" },
-    { href: "/agent/wallet", label: "Float & Top-ups", icon: <Wallet className="h-5 w-5" />, context: "canteen" },
+    { href: "/agent/wallet", label: "Cash & Top-ups", icon: <Wallet className="h-5 w-5" />, context: "canteen" },
     { href: "/profile", label: "Profile", icon: <UserIcon className="h-5 w-5" /> },
   ],
   driver: [
-    { href: "/driver", label: "Ferry Console", icon: <Bus className="h-5 w-5" />, context: "ferry" },
-    { href: "/driver/route", label: "Route & Map", icon: <MapIcon className="h-5 w-5" />, context: "ferry" },
+    { href: "/driver", label: "My Ferry", icon: <Bus className="h-5 w-5" />, context: "ferry" },
+    { href: "/driver/route", label: "Road & Map", icon: <MapIcon className="h-5 w-5" />, context: "ferry" },
     { href: "/profile", label: "Profile", icon: <UserIcon className="h-5 w-5" /> },
   ],
   admin: [
     { href: "/admin", label: "Overview", icon: <LayoutDashboard className="h-5 w-5" /> },
     { href: "/admin/people", label: "People", icon: <Users className="h-5 w-5" /> },
-    { href: "/admin/transport", label: "Transport Ops", icon: <Bus className="h-5 w-5" />, context: "ferry" },
+    { href: "/admin/transport", label: "Transport", icon: <Bus className="h-5 w-5" />, context: "ferry" },
     { href: "/admin/canteen", label: "Canteen Ops", icon: <UtensilsCrossed className="h-5 w-5" />, context: "canteen" },
     { href: "/admin/history", label: "Cash Flow", icon: <ClipboardList className="h-5 w-5" /> },
     { href: "/profile", label: "Profile", icon: <UserIcon className="h-5 w-5" /> },
@@ -128,10 +128,9 @@ export function AppShell({ children }: { children: ReactNode }) {
 
         <div className="hidden flex-1 justify-center md:flex">
           <div className="flex w-full max-w-md items-center gap-2 rounded-full border border-transparent bg-surface-container-low px-4 py-2 text-on-surface-variant">
-            <Cpu className="h-4 w-4" />
+            <Clock className="h-4 w-4" />
             <span className="truncate text-[13px]">
-              Engine: <strong className="font-semibold text-on-surface">{health?.engine === "c++" ? "C++" : "TypeScript fallback"}</strong>
-              {health?.myanmarTime ? <span className="tabular"> · {health.myanmarTime} Yangon</span> : null}
+              {health?.myanmarTime ? <span className="tabular">{health.myanmarTime} · Yangon</span> : <span>Connecting…</span>}
             </span>
           </div>
         </div>
@@ -175,13 +174,7 @@ export function AppShell({ children }: { children: ReactNode }) {
 
         <div className="mt-auto space-y-2 border-t border-outline-variant pt-4">
           <p className="px-2 text-[11px] leading-relaxed text-on-surface-variant">
-            {health ? (
-              <>
-                API {health.status} · {health.database.startsWith("connected") ? "PostgreSQL connected" : health.database}
-              </>
-            ) : (
-              "Server unreachable"
-            )}
+            {health ? "Connected" : "Not connected — the server is not answering"}
           </p>
           <button className="btn btn-ghost w-full" onClick={logout}>
             <LogOut className="h-4 w-4" /> Log out
