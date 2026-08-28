@@ -2,9 +2,7 @@
 
 > ## ⚡ What is new in this version
 >
-> This is the merge of your two BiteN Go zips, rebuilt the way the GameBuddy
-> project is built:
->
+
 > - **The frontend is a separate app, wired to a separate backend.** They talk
 >   over a plain REST API, and every screen reads and writes **one shared
 >   PostgreSQL database**. Register on your laptop, log in on your phone — same
@@ -272,10 +270,9 @@ departures, and some opening allocations so the dashboards are not empty.
    times `05:05, 16:30`, this month. One press fills every day of the month.
 7. As the student open **Ferry** → pick a month → ask for the seat. Notice the
    free-seat count does **not** change: a request holds nothing yet.
-8. Ring the agent and send the fare — outside the app, the way ferry money has
-   always moved. Back as `driver01` → **Seat requests** → Accept. *Now* the seat
-   count drops and the student's **My Ferry Pass** is valid for every day of
-   that month. No balance anywhere changed: the app never touches ferry money.
+8. Back as `driver01` → **Seat requests** → Accept. *Now* the seat count drops
+   and the month's fare leaves the student's wallet in one payment. The
+   student's **My Ferry Pass** becomes valid for every day of that month.
 9. Sign in as `admin` → **Overview**: the allocations, the agents' positions,
    the kitchen and the ferry, all on one screen.
 
@@ -819,20 +816,16 @@ the whole transport half of the app.
 
 ### What a student does
 
-1. **Ferry** → pick a road, pick a month. The months offered are the ones that
-   road's agent has published a timetable for — one month or twelve, it is the
-   agent's choice.
-2. Ask for the seat. Nothing is charged, here or anywhere.
-3. **Ring the agent on the number shown on the card** and send the fare the way
-   you always do — mobile money, cash, whatever the two of you use.
-4. The agent accepts once they have it. The seat is then theirs on **every
-   departure of that month**; the card shows the daily times, and there is
-   nothing to book again.
-5. **My Ferry Pass** prints the pass for each month they hold, with the agent's
-   number on any pass still waiting.
+1. **Ferry** → pick a road, pick a month (this month or one of the next two).
+2. Ask for the seat. Nothing has been charged yet.
+3. The transport agent accepts. **Only then** does the month's fare leave the
+   student's wallet, in one payment.
+4. The seat is theirs on **every departure of that month**. The card shows the
+   daily times the bus runs; there is nothing to book again.
+5. **My Ferry Pass** prints the pass for each month they hold.
 
-Giving up a seat just frees it. Money already sent to the agent is between the
-two of them — the app never held it, so it cannot give it back.
+Giving up a seat before the month starts puts the fare back in the wallet.
+Giving one up during the month does not — the month has been travelled.
 
 ### What the transport agent does
 
@@ -840,14 +833,12 @@ The agent owns the ferry completely. The office does not touch it.
 
 | Screen | What it does |
 |---|---|
-| **My Ferry** | register the bus (once), accept or refuse seat requests, publish a timetable for **any month**, change the seat count, run the day's departures, report and close off problems |
+| **My Ferry** | register the bus (once), accept or refuse seat requests, publish a month's timetable, change the seat count, run the day's departures, report and close off problems |
 | **Road & Map** | open the road, set the monthly price of a seat, draw the line on the real map |
 
 **Publishing a timetable** is the key action: give the daily times — for
-example `05:05, 16:30` — pick **any month from this one up to two years ahead**,
-press once, and a departure is created for every day of that month. A road is
-on sale to students for exactly the months it has a timetable, so publishing is
-also how the agent decides what to sell. Publishing again replaces the departures that have
+example `05:05, 16:30` — pick a month, press once, and a departure is created
+for every day of that month. Publishing again replaces the departures that have
 not happened yet and leaves the ones already run alone.
 
 ### What the administrator does
@@ -856,25 +847,13 @@ For transport: **nothing but watch**. The office opens and closes accounts
 (**People**) and can see the buses, roads, departures and problems on the
 **Transport** screen. There are no create or edit buttons there any more.
 
-### Where the money goes: nowhere near the app
+### Where the money goes
 
-**No ferry money passes through BiteN Go.** The student rings the agent and
-sends the fare outside it; the agent accepts the seat once they have it.
-Accepting means only *"yes, this seat is yours for that month"*.
-
-That is deliberate, and it means:
-
-- **A transport agent holds no money in the app** — no balance, no float, no
-  wallet screen. Nothing to reconcile, nothing to go wrong.
-- **Nothing is deducted from the student's wallet.** The wallet is the canteen
-  wallet only.
-- **The cash-flow screens stay canteen-only**, so the office's figures are not
-  mixed up with ferry fares it never handled.
-- The monthly price on a road is the price the agent *announces*; it is written
-  on the seat so both sides can see what was agreed, and that is all.
-
-Because of this, an agent's **phone number is essential** — it is how students
-pay. My Ferry warns the agent while their Profile has no number on it.
+Accepting a seat writes a cash-flow movement from the student to the transport
+agent, so ferry income sits beside canteen income on the money screens. A
+student whose wallet cannot cover the month cannot be accepted — the agent is
+told the exact shortfall, and the request stays waiting until the student tops
+up.
 
 ### The rules live in C++
 
@@ -888,23 +867,6 @@ checked against each other case by case.
 ---
 
 ## 17. Version history
-
-**v5**
-
-- **No ferry money passes through the app.** Accepting a seat used to take the
-  month's fare out of the student's wallet and record it against the agent.
-  Now it does nothing but confirm the seat: the student rings the agent on the
-  number shown on the road's card and sends the fare outside the app. The agent
-  holds no balance, the student's wallet is untouched, and the cash-flow screens
-  are canteen-only. The refund path is gone with it — there is nothing to
-  refund.
-- **The agent's phone number is now part of the ferry.** It travels with every
-  road and every waiting pass, as a tap-to-call link, and My Ferry warns the
-  agent while their Profile has no number on it.
-- **Any month the agent wants.** The month picker was a dropdown of three fixed
-  months; it is now a real month picker, from this month up to two years ahead.
-  A road is on sale to students for exactly the months it has a published
-  timetable — so an agent who plans six months ahead sells six months ahead.
 
 **v4**
 
