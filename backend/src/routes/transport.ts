@@ -3,8 +3,8 @@
 //
 //  WHO MAY DO WHAT
 //    Transport agent (driver)  owns their ferry completely: the bus, the road
-//                              and its map, the monthly timetable, the seat
-//                              requests, the maintenance reports.
+//                              and its map, the seat requests and the
+//                              maintenance reports.
 //    Administrator             opens and closes accounts (see /cashflow) and
 //                              WATCHES transport. Every write below that used
 //                              to be admin's now belongs to the agent.
@@ -15,10 +15,10 @@
 import { Router } from "express";
 import { z } from "zod";
 import {
+  monthsOnSale,
   cancelOwnMonthlySeat,
   createOwnRoute,
   createOwnVehicle,
-  createTrip,
   decideMonthlySeat,
   ensureDriverProfile,
   getDriverDashboard,
@@ -26,18 +26,13 @@ import {
   listDrivers,
   listMonthlySeats,
   listRoadMonths,
-  listTimetables,
   listTransportRoutes,
-  listTrips,
   listVehicleMaintenance,
   listVehicles,
-  monthsOnSale,
   publishOwnFerryRouteMap,
-  publishTimetable,
   reportVehicleIssue,
   requestMonthlySeat,
   resolveVehicleMaintenance,
-  transitionTripStatus,
   updateOwnDriverProfile,
   updateOwnFerryRoute,
   updateOwnVehicleCapacity,
@@ -56,16 +51,6 @@ transportRouter.get(
     const user = requireUser(req);
     const rows = await listTransportRoutes(user.role === "user");
     return { routes: user.role === "driver" ? rows.filter(row => row.route.driverId === user.id) : rows };
-  }),
-);
-
-transportRouter.get(
-  "/trips",
-  route(async req => {
-    const user = requireUser(req);
-    if (user.role === "driver") return { trips: await listTrips({ driverId: user.id, includeCompleted: true }) };
-    if (user.role === "user") return { trips: await listTrips({ userId: user.id }) };
-    return { trips: await listTrips({ includeCompleted: true }) };
   }),
 );
 
@@ -92,16 +77,6 @@ transportRouter.get(
     return { seats: await listMonthlySeats({}) };
   }),
 );
-
-transportRouter.get(
-  "/timetables",
-  route(async req => {
-    requireUser(req);
-    return { timetables: await listTimetables() };
-  }),
-);
-
-// --- administrator: watching only ------------------------------------------
 
 transportRouter.get(
   "/drivers",
@@ -215,6 +190,12 @@ transportRouter.post(
         mapUrl: z.string().max(2048).optional(),
         distanceKm: z.number().int().positive().max(2000).optional(),
         estimatedMinutes: z.number().int().positive().max(1440).optional(),
+        // The bus runs these same times every day. There is no departure list.
+        morningTime: z.string().regex(/^([01]\d|2[0-3]):([0-5]\d)$/, "Times look like 06:30.").optional(),
+        eveningTime: z.string().regex(/^([01]\d|2[0-3]):([0-5]\d)$/, "Times look like 06:30.").or(z.literal("")).optional(),
+        // The months this road is sold for.
+        sellFrom: monthSchema.optional(),
+        sellTo: monthSchema.or(z.literal("")).optional(),
       }),
       req.body,
     );
@@ -240,6 +221,10 @@ transportRouter.patch(
         // rather than typed by hand.
         distanceKm: z.number().int().positive().max(2000).optional(),
         estimatedMinutes: z.number().int().positive().max(1440).optional(),
+        morningTime: z.string().regex(/^([01]\d|2[0-3]):([0-5]\d)$/, "Times look like 06:30.").optional(),
+        eveningTime: z.string().regex(/^([01]\d|2[0-3]):([0-5]\d)$/, "Times look like 06:30.").or(z.literal("")).optional(),
+        sellFrom: monthSchema.optional(),
+        sellTo: monthSchema.or(z.literal("")).optional(),
       }),
       req.body,
     );
@@ -265,45 +250,6 @@ transportRouter.post(
     );
     const published = await publishOwnFerryRouteMap(driver.id, parseId(req.params.id), input);
     if (!published) throw forbidden("You can only publish a map for your own road.");
-    return { success: true };
-  }),
-);
-
-/** The daily times this road runs, for a whole month. */
-transportRouter.post(
-  "/driver/routes/:id/timetable",
-  route(async req => {
-    const driver = requireRole(req, "driver");
-    const input = parseBody(
-      z.object({
-        month: monthSchema,
-        times: z.array(z.string().regex(/^([01]\d|2[0-3]):([0-5]\d)$/, "Times look like 05:05.")).min(1).max(6),
-      }),
-      req.body,
-    );
-    const published = await publishTimetable(driver.id, parseId(req.params.id), input);
-    if (!published) throw forbidden("You can only publish a timetable for your own road.");
-    return published;
-  }),
-);
-
-/** One extra departure outside the timetable. */
-transportRouter.post(
-  "/driver/trips",
-  route(async req => {
-    const driver = requireRole(req, "driver");
-    const input = parseBody(z.object({ routeId: z.number().int().positive(), vehicleId: z.number().int().positive(), departureAt: z.coerce.date() }), req.body);
-    return { id: await createTrip({ ...input, driverId: driver.id }) };
-  }),
-);
-
-transportRouter.patch(
-  "/driver/trips/:id/status",
-  route(async req => {
-    const driver = requireRole(req, "driver");
-    const input = parseBody(z.object({ status: z.enum(["boarding", "in_progress", "completed", "cancelled"]) }), req.body);
-    const updated = await transitionTripStatus(parseId(req.params.id), driver.id, input.status);
-    if (!updated) throw forbidden("You can only update your own departures.");
     return { success: true };
   }),
 );

@@ -57,17 +57,37 @@ else
   echo "  order refused (pre-order window closed) — that is the rule working"
 fi
 
-say "ferry: student requests a seat, driver confirms it"
-TRIP=$(curl -sS "$API/transport/trips" -H "Authorization: Bearer $STUDENT" | jq -r '.trips[0].trip.id // empty')
-if [ -n "$TRIP" ]; then
-  BOOKING=$(curl -sS -X POST "$API/transport/bookings" -H "Authorization: Bearer $STUDENT" -H 'Content-Type: application/json' \
-    -d "{\"tripId\":$TRIP,\"seatCount\":1}" | jq -r '.bookingId // empty')
-  echo "  booking #$BOOKING requested on trip #$TRIP"
-  curl -sS "$API/transport/trips" -H "Authorization: Bearer $STUDENT" | jq '.trips[0] | {occupiedSeats, pendingSeats, availableSeats}'
-  [ -n "$BOOKING" ] && curl -sS -X PATCH "$API/transport/driver/bookings/$BOOKING" -H "Authorization: Bearer $DRIVER" -H 'Content-Type: application/json' -d '{"status":"confirmed"}' | jq -c '.'
-  curl -sS "$API/transport/trips" -H "Authorization: Bearer $STUDENT" | jq '.trips[0] | {occupiedSeats, availableSeats}'
+say "ferry: a seat for a whole month — and no money moves for it"
+WALLET_BEFORE=$(curl -sS "$API/cashflow/overview" -H "Authorization: Bearer $STUDENT" | jq -r '.wallet')
+ROAD=$(curl -sS "$API/transport/roads" -H "Authorization: Bearer $STUDENT" | jq -r '.roads[0].route.id // empty')
+MONTH=$(curl -sS "$API/transport/roads" -H "Authorization: Bearer $STUDENT" | jq -r '.roads[0].months[0].month // empty')
+if [ -n "$ROAD" ] && [ -n "$MONTH" ]; then
+  echo "  road #$ROAD, month $MONTH"
+  curl -sS "$API/transport/roads" -H "Authorization: Bearer $STUDENT" \
+    | jq '.roads[0] | {road: .route.name, leaves: .route.morningTime, back: .route.eveningTime, agent: .driverName, phone: .driverPhone}'
+
+  PASS=$(curl -sS -X POST "$API/transport/seats" -H "Authorization: Bearer $STUDENT" -H 'Content-Type: application/json' \
+    -d "{\"routeId\":$ROAD,\"month\":\"$MONTH\",\"seatCount\":1}" | jq -r '.passId // empty')
+  echo "  seat request #$PASS for $MONTH"
+
+  say "a request holds no seat until the agent accepts (C++ rule)"
+  curl -sS "$API/transport/roads" -H "Authorization: Bearer $STUDENT" | jq '.roads[0].months[0] | {occupiedSeats, pendingSeats, availableSeats}'
+
+  [ -n "$PASS" ] && curl -sS -X PATCH "$API/transport/driver/seats/$PASS" -H "Authorization: Bearer $DRIVER" \
+    -H 'Content-Type: application/json' -d '{"status":"confirmed"}' | jq -c '.'
+
+  say "now the seat is held for every day of the month"
+  curl -sS "$API/transport/roads" -H "Authorization: Bearer $STUDENT" | jq '.roads[0].months[0] | {occupiedSeats, pendingSeats, availableSeats}'
+
+  WALLET_AFTER=$(curl -sS "$API/cashflow/overview" -H "Authorization: Bearer $STUDENT" | jq -r '.wallet')
+  if [ "$WALLET_BEFORE" = "$WALLET_AFTER" ]; then
+    echo "  wallet unchanged ($WALLET_BEFORE) — correct: the ferry fare is paid to the agent outside the app"
+  else
+    echo "  FAIL: the wallet moved from $WALLET_BEFORE to $WALLET_AFTER; no ferry money should pass through the app" >&2
+    exit 1
+  fi
 else
-  echo "  no trips scheduled — schedule one in Transport Ops first"
+  echo "  no road on sale — open one as the transport agent first"
 fi
 
 say "money"

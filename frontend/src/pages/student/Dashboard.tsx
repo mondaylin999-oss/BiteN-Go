@@ -5,10 +5,10 @@
 
 import { Link } from "wouter";
 import { ArrowRight, Bus, Clock, Receipt, UtensilsCrossed, Wallet } from "lucide-react";
-import { api, type FlowSummary, type OrderRow, type PreorderWindow, type TripRow } from "@/lib/api";
+import { api, type FlowSummary, type OrderRow, type PreorderWindow, type RoadRow } from "@/lib/api";
 import { useApiData } from "@/hooks/useApiData";
 import { useAuth } from "@/lib/auth";
-import { clock, dateTime, kyats, relative } from "@/lib/format";
+import { dateTime, kyats, monthName } from "@/lib/format";
 import { Badge, Card, EmptyState, ErrorNote, LoadBar, PageHeader, Spinner, StatTile, StatusBadge } from "@/components/ui";
 
 type Bundle = {
@@ -16,19 +16,19 @@ type Bundle = {
   wallet: number;
   summary: FlowSummary;
   orders: OrderRow[];
-  trips: TripRow[];
+  roads: RoadRow[];
 };
 
 export default function StudentDashboard() {
   const { user } = useAuth();
   const { data, loading, error, refresh } = useApiData<Bundle>(async () => {
-    const [window, overview, orders, trips] = await Promise.all([
+    const [window, overview, orders, roads] = await Promise.all([
       api.get<PreorderWindow>("/canteen/window"),
       api.get<{ summary: FlowSummary; wallet: number }>("/cashflow/overview"),
       api.get<{ orders: OrderRow[] }>("/canteen/orders"),
-      api.get<{ trips: TripRow[] }>("/transport/trips"),
+      api.get<{ roads: RoadRow[] }>("/transport/roads"),
     ]);
-    return { window, wallet: overview.wallet, summary: overview.summary, orders: orders.orders, trips: trips.trips };
+    return { window, wallet: overview.wallet, summary: overview.summary, orders: orders.orders, roads: roads.roads };
   }, []);
 
   if (loading) return <Spinner label="Loading your day…" />;
@@ -36,19 +36,11 @@ export default function StudentDashboard() {
   if (!data) return null;
 
   const openOrders = data.orders.filter(order => !["completed", "cancelled"].includes(order.status));
-  const nextTrip = data.trips.find(trip => trip.trip.status === "scheduled" || trip.trip.status === "boarding");
-  // One line per ferry road, not per departure — the same road often has
-  // several departures and listing each one just repeats the same name.
-  const nextPerRoad = Array.from(
-    data.trips
-      .reduce((roads, trip) => {
-        const existing = roads.get(trip.route.id);
-        if (!existing || new Date(trip.trip.departureAt).getTime() < new Date(existing.trip.departureAt).getTime()) roads.set(trip.route.id, trip);
-        return roads;
-      }, new Map<number, (typeof data.trips)[number]>())
-      .values(),
-  ).sort((left, right) => new Date(left.trip.departureAt).getTime() - new Date(right.trip.departureAt).getTime());
-  const mySeats = data.trips.filter(trip => trip.ownPass).length;
+  // One line per ferry road. A road runs every day at the two times written on
+  // it, so there is no list of departures to summarise.
+  const roads = data.roads;
+  const mySeats = roads.reduce((sum, road) => sum + road.months.filter(month => month.ownPass).length, 0);
+  const nextMonth = roads.flatMap(road => road.months.map(month => month.month)).sort()[0] ?? "";
 
   return (
     <>
@@ -62,13 +54,19 @@ export default function StudentDashboard() {
         <StatTile label="Wallet" value={kyats(data.wallet)} tone="canteen" icon={<Wallet className="h-4 w-4" />} hint="Spendable in the canteen" />
         <StatTile label="Open orders" value={openOrders.length} icon={<Receipt className="h-4 w-4" />} hint={`${data.orders.length} in total`} />
         <StatTile
-          label="Next ferry"
-          value={nextTrip ? clock(nextTrip.trip.departureAt) : "—"}
+          label="Ferry leaves"
+          value={roads[0]?.route.morningTime ?? "—"}
           tone="ferry"
           icon={<Bus className="h-4 w-4" />}
-          hint={nextTrip ? `${nextTrip.route.name} · ${relative(nextTrip.trip.departureAt)}` : "No upcoming trip"}
+          hint={roads[0] ? `${roads[0].route.name}${roads[0].route.eveningTime ? ` · back ${roads[0].route.eveningTime}` : ""}` : "No road yet"}
         />
-        <StatTile label="Ferry seats" value={mySeats} tone="ferry" icon={<Clock className="h-4 w-4" />} hint="Departures covered by your monthly seat" />
+        <StatTile
+          label="My ferry months"
+          value={mySeats}
+          tone="ferry"
+          icon={<Clock className="h-4 w-4" />}
+          hint={nextMonth ? `On sale from ${monthName(nextMonth)}` : "Nothing on sale"}
+        />
       </div>
 
       <div className="grid gap-stack-md lg:grid-cols-2">
@@ -113,31 +111,36 @@ export default function StudentDashboard() {
             </Link>
           }
         >
-          {nextPerRoad.length === 0 ? (
-            <EmptyState title="No trips scheduled" description="The administrator schedules departures; they show up here as soon as they do." />
+          {roads.length === 0 ? (
+            <EmptyState title="No ferry road yet" description="A transport agent opens a road from their own screen; it shows up here as soon as they do." />
           ) : (
             <ul className="space-y-4">
-              {nextPerRoad.slice(0, 3).map(trip => (
-                <li key={trip.trip.id} className="space-y-2">
-                  <div className="flex items-start justify-between gap-3">
-                    <div className="min-w-0">
-                      <p className="truncate text-[14px] font-semibold text-on-surface">{trip.route.name}</p>
-                      <p className="text-[12px] text-on-surface-variant">
-                        {trip.route.startPoint} → {trip.route.destination} · {trip.vehicle.plateNumber}
-                      </p>
+              {roads.slice(0, 3).map(road => {
+                const month = road.months.find(entry => entry.ownPass) ?? road.months[0];
+                return (
+                  <li key={road.route.id} className="space-y-2">
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="min-w-0">
+                        <p className="truncate text-[14px] font-semibold text-on-surface">{road.route.name}</p>
+                        <p className="text-[12px] text-on-surface-variant">
+                          {road.route.startPoint} → {road.route.destination}
+                        </p>
+                      </div>
+                      <div className="text-right">
+                        <p className="tabular text-[15px] font-bold text-tertiary">{road.route.morningTime}</p>
+                        <p className="tabular text-[11px] text-on-surface-variant">
+                          {road.route.eveningTime ? `back ${road.route.eveningTime}` : "once a day"}
+                        </p>
+                      </div>
                     </div>
-                    <div className="text-right">
-                      <p className="tabular text-[15px] font-bold text-tertiary">{clock(trip.trip.departureAt)}</p>
-                      <p className="text-[11px] text-on-surface-variant">{relative(trip.trip.departureAt)}</p>
-                    </div>
-                  </div>
-                  <LoadBar percent={trip.loadPercent} />
-                  <p className="tabular text-[12px] text-on-surface-variant">
-                    {trip.availableSeats} of {trip.vehicle.totalSeats} seats free
-                    {trip.ownPass ? ` · your seat this month is ${trip.ownPass.status === "confirmed" ? "accepted" : "waiting"}` : ""}
-                  </p>
-                </li>
-              ))}
+                    <LoadBar percent={month?.loadPercent ?? 0} />
+                    <p className="tabular text-[12px] text-on-surface-variant">
+                      {month ? `${month.availableSeats} of ${month.totalSeats} seats free in ${monthName(month.month)}` : "not on sale yet"}
+                      {month?.ownPass ? ` · your seat is ${month.ownPass.status === "confirmed" ? "accepted" : "waiting"}` : ""}
+                    </p>
+                  </li>
+                );
+              })}
             </ul>
           )}
         </Card>

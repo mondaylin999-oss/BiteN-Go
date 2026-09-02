@@ -1,7 +1,7 @@
 // ===========================================================================
 //  driver/FerryConsole.tsx — the transport agent's own screen.
 //
-//  The agent owns the ferry outright: the bus, the monthly timetable, the
+//  The agent owns the ferry outright: the bus, the road's two daily times, the
 //  seats they accept, the departures they run and the problems they report.
 //  The office only opens and closes accounts.
 //
@@ -13,16 +13,8 @@ import { useState, type FormEvent } from "react";
 import { Bus, CalendarPlus, CheckCircle2, Clock, Users, Wrench, XCircle } from "lucide-react";
 import { api, ApiError, type DriverDashboard, type RoadRow } from "@/lib/api";
 import { useApiData } from "@/hooks/useApiData";
-import { clock, day, kyats, monthName, monthShort } from "@/lib/format";
+import { kyats, monthName, monthShort } from "@/lib/format";
 import { Badge, Button, Card, EmptyState, ErrorNote, Field, Input, Notice, PageHeader, Select, Spinner, StatTile, StatusBadge, Textarea } from "@/components/ui";
-
-const NEXT_TRIP_STATUS: Record<string, Array<"boarding" | "in_progress" | "completed" | "cancelled">> = {
-  scheduled: ["boarding", "cancelled"],
-  boarding: ["in_progress", "cancelled"],
-  in_progress: ["completed"],
-  completed: [],
-  cancelled: [],
-};
 
 type Payload = { dashboard: DriverDashboard; roads: RoadRow[]; months: string[] };
 
@@ -68,7 +60,6 @@ export default function FerryConsole() {
   const dashboard = data.dashboard;
   const vehicle = dashboard.vehicle?.vehicle;
   const myRoads = data.roads.filter(road => dashboard.routes.some(mine => mine.route.id === road.route.id));
-  const upcoming = dashboard.trips.filter(trip => ["scheduled", "boarding", "in_progress"].includes(trip.trip.status));
   const openMaintenance = dashboard.maintenance.filter(row => row.report.status !== "resolved");
   const thisMonth = data.months[0] ?? "";
   const soldThisMonth = myRoads.reduce((sum, road) => sum + (road.months.find(entry => entry.month === thisMonth)?.occupiedSeats ?? 0), 0);
@@ -103,7 +94,12 @@ export default function FerryConsole() {
           icon={<Users className="h-4 w-4" />}
           hint="Waiting for you"
         />
-        <StatTile label="Departures to come" value={upcoming.length} tone="ferry" icon={<Bus className="h-4 w-4" />} />
+        <StatTile
+          label="Seats left this month"
+          value={myRoads.reduce((sum, road) => sum + (road.months.find(entry => entry.month === thisMonth)?.availableSeats ?? 0), 0)}
+          tone="ferry"
+          icon={<Bus className="h-4 w-4" />}
+        />
         <StatTile label="Open problems" value={openMaintenance.length} tone={openMaintenance.length ? "error" : "neutral"} icon={<Wrench className="h-4 w-4" />} />
       </div>
 
@@ -200,15 +196,21 @@ export default function FerryConsole() {
       </Card>
 
       {/* ---------- the month, road by road ---------- */}
-      <Card title="My roads, month by month" subtitle="How many seats are sold, and the times the bus runs.">
+      <Card title="My roads, month by month" subtitle="How many seats are sold in each month you are selling.">
         {myRoads.length === 0 ? (
-          <EmptyState title="No road yet" description="Open your road in Route & Map, then publish its timetable here." />
+          <EmptyState title="No road yet" description="Open your road in Road & Map — the fee, the two daily times and the months you sell all live there." />
         ) : (
           <div className="space-y-4">
             {myRoads.map(road => (
               <div key={road.route.id} className="rounded-lg border border-outline-variant p-3">
                 <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
-                  <p className="text-[14px] font-semibold text-on-surface">{road.route.name}</p>
+                  <div>
+                    <p className="text-[14px] font-semibold text-on-surface">{road.route.name}</p>
+                    <p className="tabular text-[12px] text-on-surface-variant">
+                      Every day · {road.route.morningTime}
+                      {road.route.eveningTime ? ` out, ${road.route.eveningTime} back` : ""}
+                    </p>
+                  </div>
                   <Badge tone="ferry">{kyats(road.route.fareCents)} / seat / month</Badge>
                 </div>
                 <div className="grid gap-2 sm:grid-cols-3">
@@ -218,9 +220,6 @@ export default function FerryConsole() {
                       <p className="tabular text-[12px] text-on-surface-variant">
                         {month.occupiedSeats}/{month.totalSeats} sold
                         {month.pendingSeats ? ` · ${month.pendingSeats} waiting` : ""}
-                      </p>
-                      <p className="tabular text-[12px] text-on-surface-variant">
-                        {month.timetable ? month.timetable.split(",").join(" · ") : "no timetable yet"}
                       </p>
                       <p className="tabular text-[12px] font-semibold text-tertiary">{kyats(month.occupiedSeats * road.route.fareCents)} taken</p>
                     </div>
@@ -232,115 +231,23 @@ export default function FerryConsole() {
         )}
       </Card>
 
-      <div className="grid gap-stack-md lg:grid-cols-2">
-        {/* ---------- the monthly timetable ---------- */}
-        <Card title="Publish a month's timetable" subtitle="The times your bus leaves each day. One press fills the whole month." accent="ferry">
-          <form
-            className="space-y-4"
-            onSubmit={(event: FormEvent) => {
-              event.preventDefault();
-              const times = table.times
-                .split(",")
-                .map(time => time.trim())
-                .filter(Boolean);
-              void act(
-                "timetable",
-                () => api.post(`/transport/driver/routes/${Number(table.routeId || myRoads[0]?.route.id)}/timetable`, { month: table.month || data.months[0], times }),
-                "Timetable published — the departures for that month are in.",
-              );
-            }}
-          >
-            <div className="grid gap-4 sm:grid-cols-2">
-              <Field label="Road">
-                <Select value={table.routeId || String(myRoads[0]?.route.id ?? "")} onChange={event => setTable({ ...table, routeId: event.target.value })} required>
-                  {myRoads.map(road => (
-                    <option key={road.route.id} value={road.route.id}>
-                      {road.route.name}
-                    </option>
-                  ))}
-                </Select>
-              </Field>
-              <Field label="Month" hint="Any month from this one onwards — type it or use the picker.">
-                <Input
-                  type="month"
-                  min={data.months[0]}
-                  max={data.months[data.months.length - 1]}
-                  value={table.month || data.months[0]}
-                  onChange={event => setTable({ ...table, month: event.target.value })}
-                  required
-                />
-              </Field>
-            </div>
-            <Field label="Departure times each day" hint="Up to six, separated by commas — for example 05:05, 16:30.">
-              <Input value={table.times} onChange={event => setTable({ ...table, times: event.target.value })} required placeholder="05:05, 16:30" />
-            </Field>
-            <Button type="submit" variant="ferry" busy={busy === "timetable"} disabled={!myRoads.length}>
-              <CalendarPlus className="h-4 w-4" /> Publish the month
-            </Button>
-            <p className="text-[12px] text-on-surface-variant">
-              Publishing again replaces the departures that have not happened yet and leaves the ones already run alone.
-            </p>
-          </form>
-        </Card>
-
-        {/* ---------- capacity ---------- */}
-        <Card title="Seats on the bus" subtitle="Cannot go below what students have already paid for.">
-          <form
-            className="space-y-4"
-            onSubmit={(event: FormEvent) => {
-              event.preventDefault();
-              if (!vehicle) return;
-              void act("capacity", () => api.patch("/transport/driver/vehicle-capacity", { vehicleId: vehicle.id, totalSeats: Math.round(Number(seats)) }), "Seat count updated.");
-            }}
-          >
-            <Field label="Total seats" hint={vehicle ? `Currently ${vehicle.totalSeats}` : undefined}>
-              <Input type="number" min={1} max={200} step={1} value={seats} onChange={event => setSeats(event.target.value)} placeholder={String(vehicle?.totalSeats ?? 18)} required />
-            </Field>
-            <Button type="submit" variant="ferry" busy={busy === "capacity"} disabled={!vehicle}>
-              Update the seat count
-            </Button>
-          </form>
-        </Card>
-      </div>
-
-      {/* ---------- departures ---------- */}
-      <Card title="Departures" subtitle="Today and the days ahead, from the timetable you published.">
-        {upcoming.length === 0 ? (
-          <EmptyState title="No departures to come" description="Publish a timetable above and the whole month appears here." />
-        ) : (
-          <div className="space-y-3">
-            {upcoming.slice(0, 12).map(trip => (
-              <div key={trip.trip.id} className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-outline-variant px-3 py-3">
-                <div className="min-w-0">
-                  <p className="text-[14px] font-semibold text-on-surface">{trip.route.name}</p>
-                  <p className="tabular text-[12px] text-on-surface-variant">
-                    {day(trip.trip.departureAt)} {clock(trip.trip.departureAt)}
-                  </p>
-                </div>
-                <div className="flex flex-wrap items-center gap-2">
-                  <StatusBadge status={trip.trip.status} />
-                  {(NEXT_TRIP_STATUS[trip.trip.status] ?? []).map(next => (
-                    <Button
-                      key={next}
-                      variant={next === "cancelled" ? "ghost" : "ferry"}
-                      className="h-9"
-                      busy={busy === `trip-${trip.trip.id}`}
-                      onClick={() => void act(`trip-${trip.trip.id}`, () => api.patch(`/transport/driver/trips/${trip.trip.id}/status`, { status: next }), `Departure is now ${next.replace("_", " ")}.`)}
-                    >
-                      {next.replace("_", " ")}
-                    </Button>
-                  ))}
-                </div>
-              </div>
-            ))}
-            {upcoming.length > 12 ? (
-              <p className="tabular text-[12px] text-on-surface-variant">
-                <Clock className="mr-1 inline h-3.5 w-3.5" />
-                {upcoming.length - 12} more departures this month and next.
-              </p>
-            ) : null}
-          </div>
-        )}
+      {/* ---------- capacity ---------- */}
+      <Card title="Seats on the bus" subtitle="Cannot go below what students have already paid for.">
+        <form
+          className="flex flex-wrap items-end gap-4"
+          onSubmit={(event: FormEvent) => {
+            event.preventDefault();
+            if (!vehicle) return;
+            void act("capacity", () => api.patch("/transport/driver/vehicle-capacity", { vehicleId: vehicle.id, totalSeats: Math.round(Number(seats)) }), "Seat count updated.");
+          }}
+        >
+          <Field label="Total seats" hint={vehicle ? `Currently ${vehicle.totalSeats}` : undefined} className="w-[160px]">
+            <Input type="number" min={1} max={200} step={1} value={seats} onChange={event => setSeats(event.target.value)} placeholder={String(vehicle?.totalSeats ?? 18)} required />
+          </Field>
+          <Button type="submit" variant="ferry" busy={busy === "capacity"} disabled={!vehicle}>
+            Update the seat count
+          </Button>
+        </form>
       </Card>
 
       {/* ---------- maintenance ---------- */}

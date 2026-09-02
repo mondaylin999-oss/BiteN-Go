@@ -8,6 +8,23 @@
 
 import type { ButtonHTMLAttributes, InputHTMLAttributes, ReactNode, SelectHTMLAttributes, TextareaHTMLAttributes } from "react";
 import { AlertTriangle, Inbox, Loader2, X } from "lucide-react";
+import { useT } from "@/lib/prefs";
+
+/**
+ * TRANSLATION HAPPENS HERE, ONCE.
+ *
+ * Every screen builds its headings, buttons, tiles and empty states out of the
+ * components below, and they all pass plain English strings. So translating
+ * inside these components translates most of the app at a stroke — no screen
+ * has to know the language exists.
+ *
+ * `maybe` only touches actual strings: numbers, elements and anything already
+ * built out of JSX pass straight through untouched.
+ */
+function useMaybeTranslate() {
+  const t = useT();
+  return (value: ReactNode): ReactNode => (typeof value === "string" ? t(value) : value);
+}
 
 type Tone = "neutral" | "canteen" | "ferry" | "warning" | "error";
 
@@ -22,6 +39,9 @@ const toneChip: Record<Tone, string> = {
 // --- layout ---------------------------------------------------------------
 
 export function PageHeader({ title, subtitle, actions }: { title: string; subtitle?: ReactNode; actions?: ReactNode }) {
+  const tr = useMaybeTranslate();
+  title = String(tr(title));
+  subtitle = tr(subtitle);
   return (
     <header className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
       <div>
@@ -41,6 +61,9 @@ export function Card({ title, subtitle, actions, children, className = "", accen
   className?: string;
   accent?: Tone;
 }) {
+  const tr = useMaybeTranslate();
+  title = tr(title);
+  subtitle = tr(subtitle);
   const accentBar =
     accent === "canteen" ? "bg-secondary" : accent === "ferry" ? "bg-tertiary" : accent === "error" ? "bg-error" : accent === "warning" ? "bg-warning" : "";
   return (
@@ -68,6 +91,10 @@ export function StatTile({ label, value, hint, tone = "neutral", icon }: {
   tone?: Tone;
   icon?: ReactNode;
 }) {
+  const tr = useMaybeTranslate();
+  label = String(tr(label));
+  value = tr(value);
+  hint = tr(hint);
   const ring =
     tone === "canteen"
       ? "border-secondary/30"
@@ -78,20 +105,36 @@ export function StatTile({ label, value, hint, tone = "neutral", icon }: {
           : tone === "warning"
             ? "border-warning/40"
             : "border-outline-variant";
+  // BIG NUMBERS MUST STAY READABLE.
+  //
+  // This used to be `truncate`, which quietly cut a figure off with an
+  // ellipsis — so an administrator holding Ks 100,000,000,000 saw a number
+  // that was not the number. Nothing is ever hidden now: the text steps down
+  // in size as it grows, wraps if it still does not fit, and the tile scrolls
+  // sideways as a last resort. The full figure is also on the tile's tooltip.
+  const text = typeof value === "string" ? value : "";
+  const size = text.length > 26 ? "text-[15px]" : text.length > 20 ? "text-[17px]" : text.length > 15 ? "text-[19px]" : "text-[22px]";
+
   return (
     <div className={`card card-pad flex items-start justify-between gap-3 ${ring}`}>
-      <div className="min-w-0">
+      <div className="min-w-0 flex-1">
         <p className="text-label font-semibold uppercase tracking-wider text-on-surface-variant">{label}</p>
-        <p className="tabular mt-2 truncate text-[22px] font-bold text-on-surface">{value}</p>
+        <p
+          className={`tabular mt-2 max-w-full overflow-x-auto whitespace-nowrap pb-0.5 font-bold leading-tight text-on-surface ${size}`}
+          title={text || undefined}
+        >
+          {value}
+        </p>
         {hint ? <p className="mt-1 text-[12px] text-on-surface-variant">{hint}</p> : null}
       </div>
-      {icon ? <div className={`chip ${toneChip[tone]} h-9 w-9 justify-center p-0`}>{icon}</div> : null}
+      {icon ? <div className={`chip ${toneChip[tone]} h-9 w-9 shrink-0 justify-center p-0`}>{icon}</div> : null}
     </div>
   );
 }
 
 export function Badge({ tone = "neutral", children }: { tone?: Tone; children: ReactNode }) {
-  return <span className={`chip ${toneChip[tone]}`}>{children}</span>;
+  const tr = useMaybeTranslate();
+  return <span className={`chip ${toneChip[tone]}`}>{tr(children)}</span>;
 }
 
 // --- controls --------------------------------------------------------------
@@ -99,6 +142,8 @@ export function Badge({ tone = "neutral", children }: { tone?: Tone; children: R
 type ButtonProps = ButtonHTMLAttributes<HTMLButtonElement> & { variant?: "primary" | "canteen" | "ferry" | "ghost" | "danger"; busy?: boolean };
 
 export function Button({ variant = "primary", busy = false, className = "", children, disabled, ...rest }: ButtonProps) {
+  const tr = useMaybeTranslate();
+  children = tr(children);
   const variantClass = { primary: "btn-primary", canteen: "btn-canteen", ferry: "btn-ferry", ghost: "btn-ghost", danger: "btn-danger" }[variant];
   return (
     <button className={`btn ${variantClass} ${className}`} disabled={disabled || busy} {...rest}>
@@ -108,9 +153,12 @@ export function Button({ variant = "primary", busy = false, className = "", chil
   );
 }
 
-export function Field({ label, hint, children }: { label: string; hint?: ReactNode; children: ReactNode }) {
+export function Field({ label, hint, children, className = "" }: { label: string; hint?: ReactNode; children: ReactNode; className?: string }) {
+  const tr = useMaybeTranslate();
+  label = String(tr(label));
+  hint = tr(hint);
   return (
-    <label className="block">
+    <label className={`block ${className}`}>
       <span className="field-label">{label}</span>
       {children}
       {hint ? <span className="mt-1 block text-[12px] text-on-surface-variant">{hint}</span> : null}
@@ -140,6 +188,8 @@ export function Select(props: SelectHTMLAttributes<HTMLSelectElement>) {
 // --- states ----------------------------------------------------------------
 
 export function Spinner({ label = "Loading…" }: { label?: string }) {
+  const t = useT();
+  label = t(label);
   return (
     <div className="flex items-center justify-center gap-2 py-10 text-on-surface-variant">
       <Loader2 className="h-5 w-5 animate-spin" />
@@ -167,6 +217,9 @@ export function ErrorNote({ message, onRetry }: { message: string; onRetry?: () 
 }
 
 export function EmptyState({ title, description, action }: { title: string; description?: string; action?: ReactNode }) {
+  const t = useT();
+  title = t(title);
+  description = description ? t(description) : description;
   return (
     <div className="flex flex-col items-center justify-center gap-2 rounded-lg border border-dashed border-outline-variant px-6 py-10 text-center">
       <Inbox className="h-6 w-6 text-outline" />
@@ -178,12 +231,16 @@ export function EmptyState({ title, description, action }: { title: string; desc
 }
 
 export function Notice({ tone = "neutral", children }: { tone?: Tone; children: ReactNode }) {
+  const tr = useMaybeTranslate();
+  children = tr(children);
   return <div className={`rounded-lg px-4 py-3 text-[14px] ${toneChip[tone]} normal-case tracking-normal`}>{children}</div>;
 }
 
 // --- overlay ---------------------------------------------------------------
 
 export function Modal({ title, onClose, children, footer }: { title: string; onClose: () => void; children: ReactNode; footer?: ReactNode }) {
+  const t = useT();
+  title = t(title);
   return (
     <div className="fixed inset-0 z-[100] flex items-end justify-center bg-inverse-surface/40 p-0 sm:items-center sm:p-4" role="dialog" aria-modal="true">
       <div className="max-h-[92vh] w-full max-w-lg overflow-y-auto rounded-t-xl bg-surface-container-lowest shadow-raised sm:rounded-xl">
@@ -213,7 +270,9 @@ export function StatusBadge({ status }: { status: string }) {
           : status === "boarding" || status === "in_progress" || status === "scheduled" || status === "ready" || status === "preparing"
             ? "ferry"
             : "neutral";
-  return <Badge tone={tone}>{status.replace(/_/g, " ")}</Badge>;
+  // "awaiting_confirmation" -> "Awaiting confirmation", then translated.
+  const readable = status.replace(/_/g, " ").replace(/^./, first => first.toUpperCase());
+  return <Badge tone={tone}>{readable}</Badge>;
 }
 
 /** A thin load bar used for ferry seat occupancy. */

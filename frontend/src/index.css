@@ -114,6 +114,105 @@
 }
 
 /* --------------------------------------------------------------------------
+   DARK MODE
+   --------------------------------------------------------------------------
+   One class on <html> (set by src/lib/prefs.tsx) repaints the whole app,
+   because every screen is built from the tokens above rather than from raw
+   colours. The two context colours keep their meaning — emerald is still the
+   canteen, blue is still the ferry — just lifted so they read on a dark
+   surface, where a dark ink colour would vanish.
+   -------------------------------------------------------------------------- */
+html.dark {
+  /* --- surfaces: near-black, layered by lightness ---------------------- */
+  --color-surface: #101416;
+  --color-surface-dim: #0b0e10;
+  --color-surface-bright: #1a1f22;
+  --color-surface-container-lowest: #161b1e;
+  --color-surface-container-low: #1a1f22;
+  --color-surface-container: #1e2427;
+  --color-surface-container-high: #252b2f;
+  --color-surface-container-highest: #2d3438;
+  --color-surface-variant: #2d3438;
+  --color-background: #101416;
+
+  /* --- foreground ------------------------------------------------------ */
+  --color-on-surface: #e6e9eb;
+  --color-on-surface-variant: #b3bbc0;
+  --color-on-background: #e6e9eb;
+  --color-inverse-surface: #e6e9eb;
+  --color-inverse-on-surface: #1a1f22;
+  --color-outline: #8a9296;
+  --color-outline-variant: #3a4247;
+
+  /* --- primary (core UI): white ink on dark ---------------------------- */
+  --color-primary: #e6e9eb;
+  --color-on-primary: #101416;
+  --color-primary-container: #2a3550;
+  --color-on-primary-container: #c3cbe4;
+  --color-primary-fixed: #2a3550;
+  --color-primary-fixed-dim: #3f4a68;
+  --color-on-primary-fixed: #dae2fd;
+  --color-on-primary-fixed-variant: #bec6e0;
+
+  /* --- secondary (canteen): emerald, lifted ---------------------------- */
+  --color-secondary: #4edea3;
+  --color-on-secondary: #00281a;
+  --color-secondary-container: #00503a;
+  --color-on-secondary-container: #8ff8c8;
+  --color-secondary-fixed: #00503a;
+  --color-secondary-fixed-dim: #006c49;
+  --color-on-secondary-fixed: #8ff8c8;
+  --color-on-secondary-fixed-variant: #6cf8bb;
+
+  /* --- tertiary (ferry): blue, lifted ---------------------------------- */
+  --color-tertiary: #7fc4f5;
+  --color-on-tertiary: #00304d;
+  --color-tertiary-container: #0b3c5d;
+  --color-on-tertiary-container: #cbe6fb;
+  --color-tertiary-fixed: #0b3c5d;
+  --color-tertiary-fixed-dim: #14567f;
+  --color-on-tertiary-fixed: #cbe6fb;
+  --color-on-tertiary-fixed-variant: #93ccff;
+
+  /* --- alerts ---------------------------------------------------------- */
+  --color-error: #ffb4ab;
+  --color-on-error: #690005;
+  --color-error-container: #6d1a17;
+  --color-on-error-container: #ffdad6;
+  --color-warning: #f0b357;
+  --color-warning-container: #4a3410;
+  --color-on-warning-container: #fde3ae;
+
+  /* Shadows do almost nothing on a dark ground; borders carry the depth. */
+  --shadow-card: 0 4px 12px rgb(0 0 0 / 0.35);
+  --shadow-raised: 0 12px 24px rgb(0 0 0 / 0.5);
+
+  color-scheme: dark;
+}
+
+/* The map is the one part with its own light imagery. Take the glare off the
+   tiles in dark mode without touching the route line, the pins or the text. */
+html.dark .leaflet-tile {
+  filter: brightness(0.78) contrast(1.05) saturate(0.9);
+}
+
+html.dark .leaflet-container {
+  background: var(--color-surface-container);
+}
+
+html.dark .leaflet-container .leaflet-control-attribution {
+  background: rgb(16 20 22 / 0.82);
+  color: var(--color-on-surface-variant);
+}
+
+html.dark .leaflet-bar a,
+html.dark .leaflet-control-zoom a {
+  background: var(--color-surface-container-high);
+  color: var(--color-on-surface);
+  border-color: var(--color-outline-variant);
+}
+
+/* --------------------------------------------------------------------------
    Base
    -------------------------------------------------------------------------- */
 @layer base {
@@ -281,6 +380,14 @@
     width: 100%;
     border-collapse: collapse;
     font-size: 14px;
+  }
+
+  /* A money column is never wrapped or cut: the table scrolls sideways inside
+     its card instead (every table here sits in an .overflow-x-auto wrapper),
+     so a figure in the billions stays a figure in the billions. */
+  .data-table td.tabular,
+  .data-table th.text-right {
+    white-space: nowrap;
   }
 
   .data-table th {

@@ -289,6 +289,12 @@ export type RouteRow = {
     distanceKm: number | null;
     estimatedMinutes: number | null;
     fareCents: number;
+    /** The bus leaves at these two times every day — that is the timetable. */
+    morningTime: string;
+    eveningTime: string | null;
+    /** The months this road is sold for. */
+    sellFrom: string | null;
+    sellTo: string | null;
     status: "active" | "inactive";
   };
   driverName: string | null;
@@ -301,22 +307,6 @@ export type RouteRow = {
   mapNodes: Array<{ id: number; name: string; latitude: string; longitude: string; nodeOrder: number }>;
 };
 
-export type TripRow = {
-  trip: { id: number; routeId: number; driverId: number; vehicleId: number; departureAt: string; arrivedAt: string | null; status: string };
-  route: RouteRow["route"] & { mapNodes: RouteRow["mapNodes"] };
-  vehicle: { id: number; plateNumber: string | null; totalSeats: number; status: string; model: string; vehicleType: string; monthlyFeeCents: number };
-  driverName: string | null;
-  driverPhone: string | null;
-  occupiedSeats: number;
-  pendingSeats: number;
-  availableSeats: number;
-  loadPercent: number;
-  bookable: boolean;
-  /** The seat this student holds for the month this departure falls in. */
-  ownPass: SeatRecord | null;
-};
-
-/** One student's seat on one road for one whole month. */
 export type SeatRecord = {
   id: number;
   routeId: number;
@@ -351,8 +341,6 @@ export type RoadMonthRow = {
   availableSeats: number;
   loadPercent: number;
   sellable: boolean;
-  /** "05:05,16:30" — the daily times published for that month. */
-  timetable: string;
   ownPass: SeatRecord | null;
 };
 
@@ -361,8 +349,6 @@ export type RoadRow = RouteRow & {
   vehicle: { id: number; plateNumber: string | null; totalSeats: number; status: string; monthlyFeeCents: number } | null;
   months: RoadMonthRow[];
 };
-
-export type TimetableRow = { id: number; routeId: number; month: string; times: string };
 
 export type FlowSummary = {
   received: number;
@@ -443,7 +429,6 @@ export type DriverDashboard = {
   profile: { profile: { id: number; phone: string | null; licenseNumber: string | null; availability: "available" | "unavailable" }; user: SessionUser } | undefined;
   vehicle: VehicleRow | null;
   routes: RouteRow[];
-  trips: TripRow[];
   pendingBookings: SeatRow[];
   confirmedBookings: number;
   maintenance: MaintenanceRow[];

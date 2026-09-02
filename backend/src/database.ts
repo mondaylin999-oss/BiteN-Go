@@ -54,7 +54,7 @@ export async function pingDatabase(): Promise<{ ok: boolean; error?: string; ser
 /** Fails loudly at startup when schema.sql has not been run yet. */
 export async function assertSchemaInstalled() {
   const result = await getPool().query(
-    "SELECT COUNT(*)::int AS present FROM information_schema.tables WHERE table_schema = 'public' AND table_name IN ('users','transactions','food_items','orders','order_items','vehicles','transport_routes','trips','ride_bookings')",
+    "SELECT COUNT(*)::int AS present FROM information_schema.tables WHERE table_schema = 'public' AND table_name IN ('users','transactions','food_items','orders','order_items','vehicles','transport_routes','ride_bookings')",
   );
   const present = Number(result.rows[0]?.present ?? 0);
   if (present < 9) {

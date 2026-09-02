@@ -17,8 +17,8 @@ import { nanoid } from "nanoid";
 import { assertSchemaInstalled, closeDatabase, db } from "./database.js";
 import { ENV } from "./env.js";
 import { hashPassword, isUsableHash } from "./auth.js";
-import { foodItems, rideBookings, transactions, transportRoutes, trips, users, vehicles, routeStops, routeMapNodes, routeTimetables, driverProfiles } from "../drizzle/schema.js";
-import { addMonths, daysInMonth, yangonMonthKey, yangonWallClockToDate } from "./time.js";
+import { foodItems, rideBookings, transactions, transportRoutes, users, vehicles, routeStops, routeMapNodes, driverProfiles } from "../drizzle/schema.js";
+import { addMonths, yangonMonthKey } from "./time.js";
 import { yangonDateKey, yangonHour } from "./time.js";
 
 type SeedAccount = { username: string; name: string; email: string; role: "admin" | "agent" | "user" | "driver" };
@@ -157,6 +157,13 @@ export async function seedDatabase({ quiet = false } = {}) {
         estimatedMinutes: 25,
         // The MONTHLY price of one seat on this road.
         fareCents: 45_000,
+        // The bus leaves at these two times every single day — that is the
+        // whole timetable. There is no per-day departure record anywhere.
+        morningTime: "06:30",
+        eveningTime: "16:30",
+        // Sold from this month, for a year.
+        sellFrom: yangonMonthKey(),
+        sellTo: addMonths(yangonMonthKey(), 11),
         status: "active",
       })
       .returning({ id: transportRoutes.id });
@@ -184,27 +191,6 @@ export async function seedDatabase({ quiet = false } = {}) {
         { routeId, name: "North Hall", latitude: "16.851000", longitude: "96.163100", nodeOrder: 5 },
       ]);
 
-    // The ferry runs to a timetable for the whole month: out in the morning,
-    // back in the afternoon, every day. Publishing a timetable is what creates
-    // the individual departures, so the seed does exactly what the transport
-    // agent's screen does.
-    const times = ["05:05", "16:30"];
-    const months = [yangonMonthKey(), addMonths(yangonMonthKey(), 1)];
-    const now = new Date();
-    const departures: Array<{ routeId: number; driverId: number; vehicleId: number; departureAt: Date }> = [];
-    for (const month of months) {
-      for (let day = 1; day <= daysInMonth(month); day += 1) {
-        for (const time of times) {
-          const departureAt = yangonWallClockToDate(month, day, time);
-          if (departureAt.getTime() > now.getTime()) departures.push({ routeId, driverId, vehicleId, departureAt });
-        }
-      }
-    }
-    if (departures.length) await db().insert(trips).values(departures);
-    await db()
-      .insert(routeTimetables)
-      .values(months.map(month => ({ routeId, month, times: times.join(",") })));
-
     // One student has already asked for a seat next month, so the transport
     // agent's screen has something waiting the first time they sign in.
     await db()
@@ -218,7 +204,7 @@ export async function seedDatabase({ quiet = false } = {}) {
         status: "pending",
       });
 
-    log(`Ferry bus, road, map line, ${departures.length} departures across ${months.length} months, and one waiting seat request added.`);
+    log("Ferry bus, road, map line, daily times (06:30 and 16:30), a year on sale, and one waiting seat request added.");
   }
 
   // --- opening money ------------------------------------------------------

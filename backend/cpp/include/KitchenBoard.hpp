@@ -1,6 +1,6 @@
 #pragma once
 // ===========================================================================
-//  KitchenBoard.hpp <<
+//  KitchenBoard.hpp
 //  The Kitchen Display System (KDS) board.
 //
 //  The agent's kitchen screen is a three-lane Kanban — Incoming, Preparing,

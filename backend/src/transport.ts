@@ -2,17 +2,16 @@
 //  transport.ts — ferry bus operations.
 //
 //  Roles: the TRANSPORT AGENT (driver) owns their ferry completely — the bus,
-//  the road and its map, the monthly timetable, the seat requests and the
-//  maintenance. The ADMIN only opens and closes accounts and watches; they no
-//  longer create buses, roads or departures. The STUDENT takes a seat for a
-//  whole month.
+//  the road and its map, the monthly seat requests and the maintenance. The
+//  ADMIN only opens and closes accounts and watches. The STUDENT takes a seat
+//  for a whole month.
 //
 //  THE FERRY IS SOLD BY THE MONTH. A seat is bought once per calendar month
-//  and is good for every departure in it; the daily timetable says when the
+//  and is good for every day of it; the two times on the road say when the
 //  bus runs. Every seat number — taken, free, may-this-be-sold, may-this-be-
 //  accepted, how-low-may-capacity-go — is decided by the C++ engine
-//  (cpp/src/MonthlyPassPlanner.cpp). This module is the PostgreSQL and money
-//  side of it.
+//  (cpp/src/MonthlyPassPlanner.cpp). This module is the PostgreSQL side of it;
+//  no ferry money passes through the app at all.
 // ===========================================================================
 
 import { and, asc, desc, eq, gt, gte, inArray, lt } from "drizzle-orm";
@@ -23,9 +22,7 @@ import {
   rideBookings,
   routeMapNodes,
   routeStops,
-  routeTimetables,
   transportRoutes,
-  trips,
   users,
   vehicleMaintenance,
   vehicles,
@@ -37,21 +34,12 @@ import { callEngine, EngineRuleError } from "./engine.js";
  *  joins `users` once for the passenger. */
 const driver = alias(users, "road_driver");
 
-export type TripStatus = "scheduled" | "boarding" | "in_progress" | "completed" | "cancelled";
 export type BookingStatus = "pending" | "confirmed" | "cancelled";
 export type VehicleStatus = "operational" | "unavailable" | "maintenance";
 export type MaintenanceStatus = "reported" | "in_progress" | "resolved";
 export type FerryMapNodeInput = { name: string; latitude: number; longitude: number };
 
 const REQUEST_STATUSES: BookingStatus[] = ["pending", "confirmed"];
-
-const CAN_MOVE_TRIP: Record<TripStatus, TripStatus[]> = {
-  scheduled: ["boarding", "cancelled"],
-  boarding: ["in_progress", "cancelled"],
-  in_progress: ["completed"],
-  completed: [],
-  cancelled: [],
-};
 
 const fail = (message: string) => {
   throw new EngineRuleError(message);
@@ -82,6 +70,30 @@ function optionalMapCoordinates(value: string | undefined) {
   if (!coordinates) return null;
   if (coordinates.length > 128 || !/^-?\d+(\.\d+)?\s*,\s*-?\d+(\.\d+)?$/.test(coordinates)) fail("Enter coordinates as latitude, longitude.");
   return coordinates;
+}
+
+const TIME_PATTERN = /^([01]\d|2[0-3]):([0-5]\d)$/;
+
+/** '06:30' — the same two times every day, so this is all a road needs. */
+function requireDailyTime(value: string, label: string) {
+  const time = value.trim();
+  if (!TIME_PATTERN.test(time)) fail(`Enter ${label} as a time like 06:30.`);
+  return time;
+}
+
+function optionalDailyTime(value: string | undefined | null, label: string) {
+  if (value === undefined) return undefined;
+  const time = (value ?? "").trim();
+  if (!time) return null;
+  return requireDailyTime(time, label);
+}
+
+function optionalMonth(value: string | undefined | null, label: string) {
+  if (value === undefined) return undefined;
+  const month = (value ?? "").trim();
+  if (!month) return null;
+  if (!isMonthKey(month)) fail(`Enter ${label} as a month like 2026-09.`);
+  return month;
 }
 
 function normalizeRouteLineColor(value: string) {
@@ -294,6 +306,10 @@ export async function createTransportRoute(input: {
   vehicleId?: number;
   distanceKm?: number;
   estimatedMinutes?: number;
+  morningTime?: string;
+  eveningTime?: string;
+  sellFrom?: string;
+  sellTo?: string;
   status?: "active" | "inactive";
 }) {
   const name = requireText(input.name, "route name", 120);
@@ -304,6 +320,11 @@ export async function createTransportRoute(input: {
   const fareCents = assertPositiveInteger(input.fareCents, "fare");
   const mapUrl = optionalMapUrl(input.mapUrl);
   const mapCoordinates = optionalMapCoordinates(input.mapCoordinates);
+  const morningTime = requireDailyTime(input.morningTime ?? "06:30", "the morning time");
+  const eveningTime = optionalDailyTime(input.eveningTime, "the evening time") ?? null;
+  const sellFrom = optionalMonth(input.sellFrom, "the first month") ?? null;
+  const sellTo = optionalMonth(input.sellTo, "the last month") ?? null;
+  if (sellFrom && sellTo && sellTo < sellFrom) fail("The last month cannot be before the first.");
 
   if (input.driverId) await assertActiveDriver(input.driverId);
   if (input.vehicleId) {
@@ -328,6 +349,10 @@ export async function createTransportRoute(input: {
         vehicleId: input.vehicleId ?? null,
         distanceKm: input.distanceKm ?? null,
         estimatedMinutes: input.estimatedMinutes ?? null,
+        morningTime,
+        eveningTime,
+        sellFrom,
+        sellTo,
         status: input.status ?? "active",
       })
       .returning({ id: transportRoutes.id });
@@ -351,6 +376,10 @@ export async function updateTransportRoute(
     vehicleId?: number | null;
     distanceKm?: number | null;
     estimatedMinutes?: number | null;
+    morningTime?: string;
+    eveningTime?: string;
+    sellFrom?: string;
+    sellTo?: string;
     status?: "active" | "inactive";
   },
 ) {
@@ -370,6 +399,10 @@ export async function updateTransportRoute(
   if (input.vehicleId !== undefined) patch.vehicleId = input.vehicleId;
   if (input.distanceKm !== undefined) patch.distanceKm = input.distanceKm;
   if (input.estimatedMinutes !== undefined) patch.estimatedMinutes = input.estimatedMinutes;
+  if (input.morningTime !== undefined) patch.morningTime = requireDailyTime(input.morningTime, "the morning time");
+  if (input.eveningTime !== undefined) patch.eveningTime = optionalDailyTime(input.eveningTime, "the evening time");
+  if (input.sellFrom !== undefined) patch.sellFrom = optionalMonth(input.sellFrom, "the first month");
+  if (input.sellTo !== undefined) patch.sellTo = optionalMonth(input.sellTo, "the last month");
   if (input.status) patch.status = input.status;
   if (input.stops !== undefined) {
     stops = input.stops.map(stop => requireText(stop, "pickup stop")).filter((stop, index, list) => list.indexOf(stop) === index);
@@ -491,129 +524,6 @@ export async function listTransportRoutes(activeOnly = false) {
   }));
 }
 
-// --- trips -----------------------------------------------------------------
-
-export async function createTrip(input: { routeId: number; driverId: number; vehicleId: number; departureAt: Date }) {
-  if (input.departureAt.getTime() <= Date.now()) fail("Schedule a trip for a future time.");
-  await assertActiveDriver(input.driverId);
-
-  const [route, vehicle] = await Promise.all([getTransportRoute(input.routeId), getVehicle(input.vehicleId)]);
-  if (!route || route.route.status !== "active") fail("Choose an active route.");
-  if (!vehicle || vehicle.vehicle.status !== "operational") fail("Choose an operational vehicle.");
-  if (vehicle!.vehicle.driverId !== input.driverId) fail("Assign this vehicle to the selected driver before scheduling a trip.");
-
-  const inserted = await db().insert(trips).values(input).returning({ id: trips.id });
-  return inserted[0]!.id;
-}
-
-/** Raw trip rows joined with their route, vehicle and driver. */
-async function rawTrips(input: { driverId?: number; includeCompleted?: boolean } = {}) {
-  return db()
-    .select({ trip: trips, route: transportRoutes, vehicle: vehicles, driverName: users.name, driverPhone: driverProfiles.phone })
-    .from(trips)
-    .innerJoin(transportRoutes, eq(trips.routeId, transportRoutes.id))
-    .innerJoin(vehicles, eq(trips.vehicleId, vehicles.id))
-    .innerJoin(users, eq(trips.driverId, users.id))
-    .leftJoin(driverProfiles, eq(users.id, driverProfiles.userId))
-    .where(
-      input.driverId
-        ? eq(trips.driverId, input.driverId)
-        : input.includeCompleted
-          ? undefined
-          : inArray(trips.status, ["scheduled", "boarding", "in_progress"]),
-    )
-    .orderBy(asc(trips.departureAt));
-}
-
-/** Trip rows in the shape the C++ seat planner expects. */
-async function engineTrips(input: { driverId?: number; includeCompleted?: boolean } = { includeCompleted: true }) {
-  const rows = await rawTrips(input);
-  return rows.map(row => ({
-    tripId: row.trip.id,
-    routeId: row.route.id,
-    vehicleId: row.vehicle.id,
-    driverId: row.trip.driverId,
-    totalSeats: row.vehicle.totalSeats,
-    fareCents: row.route.fareCents,
-    status: row.trip.status,
-    routeStatus: row.route.status,
-    vehicleStatus: row.vehicle.status,
-  }));
-}
-
-async function engineBookings() {
-  const rows = await db().select().from(rideBookings);
-  return rows.map(row => ({ id: row.id, tripId: row.tripId ?? 0, userId: row.userId, seatCount: row.seatCount, status: row.status }));
-}
-
-export async function listTrips(input: { driverId?: number; userId?: number; includeCompleted?: boolean } = {}) {
-  const rows = await rawTrips(input);
-  if (!rows.length) return [];
-
-  const bookingRows = await engineBookings();
-  const { trips: seatPlan } = await callEngine<{ trips: Array<{ tripId: number; occupiedSeats: number; pendingSeats: number; availableSeats: number; loadPercent: number; bookable: boolean }> }>(
-    "ferry.plan",
-    {
-      trips: rows.map(row => ({
-        tripId: row.trip.id,
-        routeId: row.route.id,
-        vehicleId: row.vehicle.id,
-        driverId: row.trip.driverId,
-        totalSeats: row.vehicle.totalSeats,
-        fareCents: row.route.fareCents,
-        status: row.trip.status,
-        routeStatus: row.route.status,
-        vehicleStatus: row.vehicle.status,
-      })),
-      bookings: bookingRows,
-    },
-  );
-
-  const mapNodes = await db().select().from(routeMapNodes).orderBy(asc(routeMapNodes.nodeOrder));
-  // Seats are monthly now, so what matters for a departure is whether the
-  // student holds a seat on that ROAD for the month the departure falls in.
-  const ownPasses = input.userId
-    ? await db()
-        .select()
-        .from(rideBookings)
-        .where(and(eq(rideBookings.userId, input.userId), inArray(rideBookings.status, REQUEST_STATUSES)))
-    : [];
-
-  return rows.map(row => {
-    const seats = seatPlan.find(entry => entry.tripId === row.trip.id);
-    return {
-      ...row,
-      route: { ...row.route, mapNodes: mapNodes.filter(node => node.routeId === row.route.id) },
-      occupiedSeats: seats?.occupiedSeats ?? 0,
-      pendingSeats: seats?.pendingSeats ?? 0,
-      availableSeats: seats?.availableSeats ?? row.vehicle.totalSeats,
-      loadPercent: seats?.loadPercent ?? 0,
-      bookable: seats?.bookable ?? false,
-      ownPass:
-        ownPasses.find(pass => pass.routeId === row.route.id && pass.month === yangonMonthKey(new Date(row.trip.departureAt))) ?? null,
-    };
-  });
-}
-
-export async function getTrip(tripId: number) {
-  const rows = await listTrips({ includeCompleted: true });
-  return rows.find(row => row.trip.id === tripId);
-}
-
-export async function transitionTripStatus(tripId: number, driverId: number, nextStatus: TripStatus) {
-  const rows = await db().select().from(trips).where(eq(trips.id, tripId)).limit(1);
-  const trip = rows[0];
-  if (!trip || trip.driverId !== driverId) return false;
-  if (!CAN_MOVE_TRIP[trip.status].includes(nextStatus))
-    fail(`A ${trip.status.replace("_", " ")} trip cannot move to ${nextStatus.replace("_", " ")}.`);
-
-  await db()
-    .update(trips)
-    .set({ status: nextStatus, arrivedAt: nextStatus === "completed" ? new Date() : trip.arrivedAt })
-    .where(eq(trips.id, tripId));
-  return true;
-}
-
 // --- monthly seats ---------------------------------------------------------
 //
 //  The ferry is sold BY THE MONTH. A student asks for one seat on one road for
@@ -629,15 +539,13 @@ export async function transitionTripStatus(tripId: number, driverId: number, nex
 //  Every seat sum is decided by the C++ engine (cpp/src/MonthlyPassPlanner.cpp)
 //  — this module is the PostgreSQL side of it.
 
-/** How far ahead an agent may publish a timetable: two years. */
+/** The furthest ahead a road may be sold: two years. */
 export const MONTHS_PUBLISHABLE = 24;
 
-/**
- * The months an agent is allowed to publish a timetable for: this one and the
- * next two years' worth. The agent picks freely inside that window — a road is
- * on sale for a month only once its timetable exists, so this list is about
- * what the picker offers, not about what students can buy.
- */
+/** If the agent names no last month, a road is on sale for a year. */
+export const DEFAULT_MONTHS_ON_SALE = 12;
+
+/** The months an agent may choose between when setting a road's selling window. */
 export function monthsOnSale(now = new Date()) {
   const current = yangonMonthKey(now);
   return Array.from({ length: MONTHS_PUBLISHABLE }, (_, index) => addMonths(current, index));
@@ -692,26 +600,34 @@ export async function listRoadMonths(input: { userId?: number; activeOnly?: bool
 
   const vehicleRows = await db().select().from(vehicles);
   const passes = await enginePasses();
-  const timetables = await db().select().from(routeTimetables);
   const current = yangonMonthKey(now);
 
   /**
-   * Which months this road offers. NOT a fixed window: a month is offered
-   * because the agent published a timetable for it, so an agent who plans six
-   * months ahead sells six months ahead. Months already finished drop off,
-   * except one a student still holds a seat in, which stays visible to them.
+   * Which months a road is sold for. The agent sets a first month and, if they
+   * want, a last one; everything in between is on sale. No timetable, no
+   * departure list — a road that is running runs every day, at the two times
+   * written on it.
+   *
+   * Months already finished drop off, except one a student still holds a seat
+   * in, which stays on their screen until the month is over.
    */
-  const monthsFor = (routeId: number) => {
-    const published = timetables.filter(entry => entry.routeId === routeId).map(entry => entry.month);
-    const held = passes.filter(pass => pass.routeId === routeId && REQUEST_STATUSES.includes(pass.status as BookingStatus)).map(pass => pass.month);
-    return Array.from(new Set([...published, ...held]))
-      .filter(month => month >= current)
-      .sort();
+  const monthsFor = (route: { id: number; sellFrom: string | null; sellTo: string | null }) => {
+    const from = route.sellFrom && route.sellFrom > current ? route.sellFrom : current;
+    const to = route.sellTo && route.sellTo >= from ? route.sellTo : addMonths(from, DEFAULT_MONTHS_ON_SALE - 1);
+    const window: string[] = [];
+    for (let month = from; month <= to && window.length < MONTHS_PUBLISHABLE; month = addMonths(month, 1)) window.push(month);
+
+    const held = passes
+      .filter(pass => pass.routeId === route.id && REQUEST_STATUSES.includes(pass.status as BookingStatus))
+      .map(pass => pass.month)
+      .filter(month => month >= current);
+
+    return Array.from(new Set([...window, ...held])).sort();
   };
 
   const roadMonths = roads.flatMap(road => {
     const vehicle = vehicleRows.find(candidate => candidate.id === road.route.vehicleId) ?? null;
-    return monthsFor(road.route.id).map(month => engineRoad({ route: road.route, vehicle }, month));
+    return monthsFor(road.route).map(month => engineRoad({ route: road.route, vehicle }, month));
   });
 
   const { roads: plan } = await callEngine<{
@@ -729,7 +645,7 @@ export async function listRoadMonths(input: { userId?: number; activeOnly?: bool
     return {
       ...road,
       vehicle,
-      months: monthsFor(road.route.id).map(month => {
+      months: monthsFor(road.route).map(month => {
         const seats = plan.find(entry => entry.routeId === road.route.id && entry.month === month);
         return {
           month,
@@ -740,8 +656,7 @@ export async function listRoadMonths(input: { userId?: number; activeOnly?: bool
           loadPercent: seats?.loadPercent ?? 0,
           // A month already gone is never sellable, whatever the seat count.
           sellable: (seats?.sellable ?? false) && month >= currentMonth,
-          timetable: timetables.find(entry => entry.routeId === road.route.id && entry.month === month)?.times ?? "",
-          ownPass: ownPasses.find(pass => pass.routeId === road.route.id && pass.month === month) ?? null,
+            ownPass: ownPasses.find(pass => pass.routeId === road.route.id && pass.month === month) ?? null,
         };
       }),
     };
@@ -867,81 +782,6 @@ export async function listMonthlySeats(input: { routeId?: number; driverId?: num
     .orderBy(desc(rideBookings.createdAt));
 }
 
-// --- the monthly timetable -------------------------------------------------
-
-const TIME_PATTERN = /^([01]\d|2[0-3]):([0-5]\d)$/;
-
-/** The timetable rows a road has published, newest month first. */
-export async function listTimetables(routeId?: number) {
-  return db()
-    .select()
-    .from(routeTimetables)
-    .where(routeId ? eq(routeTimetables.routeId, routeId) : undefined)
-    .orderBy(desc(routeTimetables.month));
-}
-
-/**
- * The agent publishes the daily times their bus runs for a whole month, and
- * the system writes a departure for every day of that month. Re-publishing the
- * same month replaces the departures that have not happened yet and leaves the
- * ones already run (or already cancelled) untouched.
- */
-export async function publishTimetable(driverId: number, routeId: number, input: { month: string; times: string[] }) {
-  if (!isMonthKey(input.month)) fail("Choose a month.");
-  const currentMonth = yangonMonthKey();
-  if (input.month < currentMonth) fail("That month has already finished.");
-  if (input.month > addMonths(currentMonth, MONTHS_PUBLISHABLE - 1)) fail("Publish a timetable up to two years ahead.");
-
-  const times = Array.from(new Set(input.times.map(time => time.trim()))).sort();
-  if (!times.length) fail("Add at least one departure time.");
-  if (times.length > 6) fail("Up to six departures a day.");
-  for (const time of times) if (!TIME_PATTERN.test(time)) fail(`"${time}" is not a time like 05:05.`);
-
-  const road = await roadWithVehicle(routeId);
-  if (!road || road.route.driverId !== driverId) return false;
-  if (!road.vehicle) fail("Add your ferry bus before publishing a timetable.");
-
-  const now = new Date();
-  const days = daysInMonth(input.month);
-  const departures: Array<{ routeId: number; driverId: number; vehicleId: number; departureAt: Date }> = [];
-  for (let day = 1; day <= days; day += 1) {
-    for (const time of times) {
-      const departureAt = yangonWallClockToDate(input.month, day, time);
-      if (departureAt.getTime() <= now.getTime()) continue; // today's earlier runs are in the past
-      departures.push({ routeId, driverId, vehicleId: road.vehicle!.id, departureAt });
-    }
-  }
-
-  const monthStart = yangonWallClockToDate(input.month, 1, "00:00");
-  const monthEnd = yangonWallClockToDate(addMonths(input.month, 1), 1, "00:00");
-
-  await db().transaction(async tx => {
-    // Only untouched, still-to-come departures are replaced.
-    await tx
-      .delete(trips)
-      .where(
-        and(
-          eq(trips.routeId, routeId),
-          eq(trips.status, "scheduled"),
-          gte(trips.departureAt, monthStart),
-          lt(trips.departureAt, monthEnd),
-          gt(trips.departureAt, now),
-        ),
-      );
-    if (departures.length) await tx.insert(trips).values(departures);
-
-    const existing = await tx
-      .select({ id: routeTimetables.id })
-      .from(routeTimetables)
-      .where(and(eq(routeTimetables.routeId, routeId), eq(routeTimetables.month, input.month)))
-      .limit(1);
-    if (existing[0]) await tx.update(routeTimetables).set({ times: times.join(",") }).where(eq(routeTimetables.id, existing[0].id));
-    else await tx.insert(routeTimetables).values({ routeId, month: input.month, times: times.join(",") });
-  });
-
-  return { month: input.month, times, departuresCreated: departures.length };
-}
-
 // --- maintenance -----------------------------------------------------------
 
 export async function reportVehicleIssue(input: { driverId: number; vehicleId: number; issue: string }) {
@@ -1016,7 +856,20 @@ export async function createOwnVehicle(
 /** The agent opens a road of their own, served by their own bus. */
 export async function createOwnRoute(
   driverId: number,
-  input: { name: string; startPoint: string; destination: string; stops: string[]; fareCents: number; mapUrl?: string; distanceKm?: number; estimatedMinutes?: number },
+  input: {
+    name: string;
+    startPoint: string;
+    destination: string;
+    stops: string[];
+    fareCents: number;
+    mapUrl?: string;
+    distanceKm?: number;
+    estimatedMinutes?: number;
+    morningTime?: string;
+    eveningTime?: string;
+    sellFrom?: string;
+    sellTo?: string;
+  },
 ) {
   const busRows = await db().select({ id: vehicles.id }).from(vehicles).where(eq(vehicles.driverId, driverId)).limit(1);
   const bus = busRows[0];
@@ -1029,11 +882,10 @@ export async function createOwnRoute(
 
 export async function getDriverDashboard(driverId: number) {
   await ensureDriverProfile(driverId);
-  const [profile, vehicleRows, routeRows, tripRows, bookingRows, maintenanceRows] = await Promise.all([
+  const [profile, vehicleRows, routeRows, bookingRows, maintenanceRows] = await Promise.all([
     getDriverProfile(driverId),
     listVehicles(),
     listTransportRoutes(),
-    listTrips({ driverId, includeCompleted: true }),
     listMonthlySeats({ driverId }),
     listVehicleMaintenance(),
   ]);
@@ -1043,7 +895,6 @@ export async function getDriverDashboard(driverId: number) {
     profile,
     vehicle,
     routes: routeRows.filter(row => row.route.driverId === driverId),
-    trips: tripRows,
     pendingBookings: bookingRows.filter(row => row.pass.status === "pending"),
     confirmedBookings: bookingRows.filter(row => row.pass.status === "confirmed").length,
     maintenance: vehicle ? maintenanceRows.filter(row => row.report.vehicleId === vehicle.vehicle.id) : [],

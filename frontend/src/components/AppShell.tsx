@@ -21,7 +21,9 @@ import {
   Map as MapIcon,
   Menu as MenuIcon,
   Receipt,
+  Moon,
   Settings,
+  Sun,
   ShieldCheck,
   Ticket,
   User as UserIcon,
@@ -31,6 +33,8 @@ import {
   X,
 } from "lucide-react";
 import { useAuth } from "@/lib/auth";
+import { usePrefs } from "@/lib/prefs";
+import { LANGUAGE_NAMES } from "@/lib/i18n";
 import { initials, titleCase } from "@/lib/format";
 import type { Role } from "@/lib/api";
 
@@ -83,6 +87,7 @@ function isActive(current: string, href: string) {
 
 export function AppShell({ children }: { children: ReactNode }) {
   const { user, health, logout } = useAuth();
+  const { language, theme, toggleLanguage, toggleTheme, t } = usePrefs();
   const [location] = useLocation();
   const [drawerOpen, setDrawerOpen] = useState(false);
 
@@ -101,7 +106,7 @@ export function AppShell({ children }: { children: ReactNode }) {
         aria-current={active ? "page" : undefined}
       >
         {item.icon}
-        <span>{item.label}</span>
+        <span>{t(item.label)}</span>
       </Link>
     );
   };
@@ -135,13 +140,33 @@ export function AppShell({ children }: { children: ReactNode }) {
           </div>
         </div>
 
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-1 sm:gap-2">
+          {/* ---- English ⇄ မြန်မာ, one click ---- */}
+          <button
+            className="rounded-full border border-outline-variant px-2.5 py-1.5 text-[12px] font-bold text-on-surface hover:bg-surface-container-high"
+            onClick={toggleLanguage}
+            aria-label={`Switch to ${language === "en" ? LANGUAGE_NAMES.my : LANGUAGE_NAMES.en}`}
+            title={`${t("Language")}: ${LANGUAGE_NAMES[language]}`}
+          >
+            {language === "en" ? "EN" : "မြန်"}
+          </button>
+
+          {/* ---- light ⇄ dark, one click ---- */}
+          <button
+            className="rounded-full p-2 text-on-surface hover:bg-surface-container-high"
+            onClick={toggleTheme}
+            aria-label={theme === "dark" ? t("Light mode") : t("Dark mode")}
+            title={theme === "dark" ? t("Light mode") : t("Dark mode")}
+          >
+            {theme === "dark" ? <Sun className="h-5 w-5" /> : <Moon className="h-5 w-5" />}
+          </button>
+
           <Link href="/profile" className="hidden rounded-full p-2 text-on-surface hover:bg-surface-container-high sm:block" aria-label="Settings">
             <Settings className="h-5 w-5" />
           </Link>
           <div className="hidden text-right sm:block">
             <p className="max-w-[160px] truncate text-[13px] font-semibold text-on-surface">{user.name ?? user.username}</p>
-            <p className="text-[11px] uppercase tracking-wider text-on-surface-variant">{ROLE_LABEL[user.role]}</p>
+            <p className="text-[11px] uppercase tracking-wider text-on-surface-variant">{t(ROLE_LABEL[user.role])}</p>
           </div>
           <span className="flex h-9 w-9 items-center justify-center rounded-full bg-surface-container-highest text-[13px] font-bold text-on-surface">
             {initials(user.name ?? user.username)}
@@ -164,8 +189,10 @@ export function AppShell({ children }: { children: ReactNode }) {
               <ShieldCheck className="h-5 w-5" />
             </span>
             <div className="min-w-0">
-              <h2 className="text-headline-md font-bold leading-tight text-on-surface">System Switcher</h2>
-              <p className="truncate text-label font-semibold text-secondary">Current: {ROLE_LABEL[user.role]}</p>
+              <h2 className="text-headline-md font-bold leading-tight text-on-surface">{t("System Switcher")}</h2>
+              <p className="truncate text-label font-semibold text-secondary">
+                {t("Current")}: {t(ROLE_LABEL[user.role])}
+              </p>
             </div>
           </div>
         </div>
@@ -174,10 +201,10 @@ export function AppShell({ children }: { children: ReactNode }) {
 
         <div className="mt-auto space-y-2 border-t border-outline-variant pt-4">
           <p className="px-2 text-[11px] leading-relaxed text-on-surface-variant">
-            {health ? "Connected" : "Not connected — the server is not answering"}
+            {health ? t("Connected") : t("Not connected — the server is not answering")}
           </p>
           <button className="btn btn-ghost w-full" onClick={logout}>
-            <LogOut className="h-4 w-4" /> Log out
+            <LogOut className="h-4 w-4" /> {t("Log out")}
           </button>
         </div>
       </aside>
@@ -216,7 +243,7 @@ export function AppShell({ children }: { children: ReactNode }) {
               }`}
             >
               {item.icon}
-              <span className="truncate">{item.label.split(" ")[0]}</span>
+              <span className="truncate">{t(item.label).split(" ")[0]}</span>
             </Link>
           );
         })}

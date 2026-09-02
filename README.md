@@ -2,7 +2,9 @@
 
 > ## ⚡ What is new in this version
 >
-
+> This is the merge of your two BiteN Go zips, rebuilt the way the GameBuddy
+> project is built:
+>
 > - **The frontend is a separate app, wired to a separate backend.** They talk
 >   over a plain REST API, and every screen reads and writes **one shared
 >   PostgreSQL database**. Register on your laptop, log in on your phone — same
@@ -30,7 +32,7 @@ A campus platform with two halves that share one wallet:
 - **Smart canteen** — agents publish a menu inside the Myanmar pre-order window
   (12:00 PM → midnight), students pre-order with the wallet or with cash, and
   the kitchen works a three-lane display board.
-- **Ferry bus** — the administrator registers buses, routes and departures; the
+- **Ferry bus** — the transport agent registers their own bus and road; the
   transport agent runs their own ferry and accepts seat requests; students book
   a seat and carry a pass.
 - **4 roles / 4 portals:** Administrator, Canteen agent, Transport agent
@@ -70,7 +72,8 @@ biten-go/
 14. [The ferry map — real roads with Leaflet + OSRM](#14-the-ferry-map--real-roads-with-leaflet--osrm)
 15. [doctor.bat — one click that checks everything](#15-doctorbat--one-click-that-checks-everything)
 16. [The ferry, month by month](#16-the-ferry-month-by-month)
-17. [Version history](#17-version-history)
+17. [Language and theme](#17-language-and-theme)
+18. [Version history](#18-version-history)
 
 ---
 
@@ -80,7 +83,7 @@ biten-go/
 |---|---|---|
 | **Student** | `/student` | Dashboard, **Canteen Menu**, **Meal Orders**, **Wallet**, **Ferry** (a seat by the month), **My Ferry Pass** |
 | **Canteen agent** | `/agent` | **Kitchen Display** (the order board), **Menu Board**, **Cash & Top-ups** |
-| **Transport agent** | `/driver` | **My Ferry** (own bus, monthly seats, timetable, departures, faults), **Road & Map** |
+| **Transport agent** | `/driver` | **My Ferry** (own bus, monthly seat requests, faults), **Road & Map** (road, monthly price, the two daily times, months on sale, map) |
 | **Administrator** | `/admin` | **Overview**, **People** (opens and closes every account), **Transport** (watching only), **Canteen Ops**, **Cash Flow** |
 
 It is one React app, and the routes are guarded: a student who types `/admin`
@@ -222,7 +225,6 @@ node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
 | `driver_profiles` | the transport agent's phone, licence, availability |
 | `transport_routes`, `route_stops` | routes and their pickup stops |
 | `route_map_nodes` | the geographic points that draw the route line |
-| `trips` | one departure of a route |
 | `ride_bookings` | one student's seat request on one trip |
 | `transport_payments` | the link between a booking and its charge |
 | `vehicle_maintenance` | faults reported by the transport agent |
@@ -249,8 +251,9 @@ Change `SEED_PASSWORD` in `.env` before the first run if you want a different
 one, and **change all of them before anyone real uses this**. You can re-run the
 seed at any time with `cd backend && npm run seed`.
 
-The seed also adds 8 demo dishes, one ferry bus with a route and two upcoming
-departures, and some opening allocations so the dashboards are not empty.
+The seed also adds 8 demo dishes, one ferry bus with a road (06:30 out, 16:30
+back, on sale for a year), one waiting seat request, and some opening
+allocations so the dashboards are not empty.
 
 ### First run, end to end (3 minutes)
 
@@ -266,13 +269,15 @@ departures, and some opening allocations so the dashboards are not empty.
    complete.
 5. As the student, open **Wallet**: the order came out of the balance, and the
    running balance is the one the records hold.
-6. Sign in as `driver01` → **My Ferry** → **Publish a month's timetable**:
-   times `05:05, 16:30`, this month. One press fills every day of the month.
+6. Sign in as `driver01` → **Road & Map**: the road already has a monthly
+   price, a morning time and an evening time. That is the whole timetable —
+   the bus runs those two times every day it is sold for.
 7. As the student open **Ferry** → pick a month → ask for the seat. Notice the
    free-seat count does **not** change: a request holds nothing yet.
-8. Back as `driver01` → **Seat requests** → Accept. *Now* the seat count drops
-   and the month's fare leaves the student's wallet in one payment. The
-   student's **My Ferry Pass** becomes valid for every day of that month.
+8. Ring the agent and send the fare — outside the app, the way ferry money has
+   always moved. Back as `driver01` → **Seat requests** → Accept. *Now* the seat
+   count drops and the student's **My Ferry Pass** is valid for every day of
+   that month. No balance anywhere changed: the app never touches ferry money.
 9. Sign in as `admin` → **Overview**: the allocations, the agents' positions,
    the kitchen and the ferry, all on one screen.
 
@@ -437,7 +442,7 @@ sends it as `Authorization: Bearer …` on every request. No cookies are used, s
 nothing breaks when the page and the API are on different addresses.
 
 **Freshness.** Screens that other people change reload by themselves: the
-kitchen board every 15 seconds, ferry departures every 20, meal orders every 30.
+kitchen board every 15 seconds, the ferry every 30, meal orders every 30.
 Everything else reloads right after you change it.
 
 **The map** is the one screen that also calls the outside world — it fetches map
@@ -468,11 +473,11 @@ These are decided in C++ and cannot be worked around from the browser.
 
 - A **pending** seat request holds nothing. Only a request the driver has
   **confirmed** reduces the free-seat count.
-- A student may hold only one active request per departure; 1–8 seats each.
+- A student may hold only one live seat per road per month; 1–8 seats each.
 - The driver may not confirm a request that would oversell the bus, and may not
   shrink capacity below the seats already confirmed.
 - Trips move `scheduled → boarding → in_progress → completed`, with
-  cancellation allowed only before departure.
+  a seat may be given up while the month has not finished.
 - Only the assigned transport agent can edit a route or publish its map, and a
   map link must be `https://`.
 
@@ -816,16 +821,19 @@ the whole transport half of the app.
 
 ### What a student does
 
-1. **Ferry** → pick a road, pick a month (this month or one of the next two).
-2. Ask for the seat. Nothing has been charged yet.
-3. The transport agent accepts. **Only then** does the month's fare leave the
-   student's wallet, in one payment.
-4. The seat is theirs on **every departure of that month**. The card shows the
-   daily times the bus runs; there is nothing to book again.
-5. **My Ferry Pass** prints the pass for each month they hold.
+1. **Ferry** → pick a road, pick a month. The months offered are the ones the
+   agent is selling — they set a first month and, if they want, a last one.
+2. Ask for the seat. Nothing is charged, here or anywhere.
+3. **Ring the agent on the number shown on the card** and send the fare the way
+   you always do — mobile money, cash, whatever the two of you use.
+4. The agent accepts once they have it. The seat is then theirs **every day of
+   that month**; the card shows the two times the bus runs, and there is
+   nothing to book again.
+5. **My Ferry Pass** prints the pass for each month they hold, with the agent's
+   number on any pass still waiting.
 
-Giving up a seat before the month starts puts the fare back in the wallet.
-Giving one up during the month does not — the month has been travelled.
+Giving up a seat just frees it. Money already sent to the agent is between the
+two of them — the app never held it, so it cannot give it back.
 
 ### What the transport agent does
 
@@ -833,27 +841,40 @@ The agent owns the ferry completely. The office does not touch it.
 
 | Screen | What it does |
 |---|---|
-| **My Ferry** | register the bus (once), accept or refuse seat requests, publish a month's timetable, change the seat count, run the day's departures, report and close off problems |
+| **My Ferry** | register the bus (once), accept or refuse seat requests, see what is sold month by month, change the seat count, report and close off problems |
 | **Road & Map** | open the road, set the monthly price of a seat, draw the line on the real map |
 
-**Publishing a timetable** is the key action: give the daily times — for
-example `05:05, 16:30` — pick a month, press once, and a departure is created
-for every day of that month. Publishing again replaces the departures that have
-not happened yet and leaves the ones already run alone.
+**There is nothing per-day to fill in.** A road carries a monthly price, a
+morning time, an optional evening time, and the months it is sold for. That is
+the entire ferry setup — four fields and the map. The bus runs those two times
+every day of every month on sale, so no departure is ever created, listed,
+cancelled or re-added.
 
 ### What the administrator does
 
 For transport: **nothing but watch**. The office opens and closes accounts
-(**People**) and can see the buses, roads, departures and problems on the
+(**People**) and can see the buses, roads, monthly seats and problems on the
 **Transport** screen. There are no create or edit buttons there any more.
 
-### Where the money goes
+### Where the money goes: nowhere near the app
 
-Accepting a seat writes a cash-flow movement from the student to the transport
-agent, so ferry income sits beside canteen income on the money screens. A
-student whose wallet cannot cover the month cannot be accepted — the agent is
-told the exact shortfall, and the request stays waiting until the student tops
-up.
+**No ferry money passes through BiteN Go.** The student rings the agent and
+sends the fare outside it; the agent accepts the seat once they have it.
+Accepting means only *"yes, this seat is yours for that month"*.
+
+That is deliberate, and it means:
+
+- **A transport agent holds no money in the app** — no balance, no float, no
+  wallet screen. Nothing to reconcile, nothing to go wrong.
+- **Nothing is deducted from the student's wallet.** The wallet is the canteen
+  wallet only.
+- **The cash-flow screens stay canteen-only**, so the office's figures are not
+  mixed up with ferry fares it never handled.
+- The monthly price on a road is the price the agent *announces*; it is written
+  on the seat so both sides can see what was agreed, and that is all.
+
+Because of this, an agent's **phone number is essential** — it is how students
+pay. My Ferry warns the agent while their Profile has no number on it.
 
 ### The rules live in C++
 
@@ -866,7 +887,83 @@ checked against each other case by case.
 
 ---
 
-## 17. Version history
+## 17. Language and theme
+
+Two buttons sit in the top-right corner of every screen, for every role,
+signed in or not:
+
+| Button | What it does |
+|---|---|
+| **EN / မြန်** | switches the whole interface between English and Myanmar, instantly |
+| ☾ / ☀ | switches between light and dark |
+
+Both are remembered in that browser, so a student's phone and the office's
+desktop each keep their own choice. The theme starts from what the device
+itself prefers; the language starts in English.
+
+### Correcting or adding Myanmar wording
+
+Everything lives in one file: **`frontend/src/lib/i18n.ts`**. The key is the
+English text itself:
+
+```ts
+"Seat requests": "ထိုင်ခုံ တောင်းဆိုမှုများ",
+```
+
+Find the English on the left, edit the Burmese on the right — that is the whole
+job. Anything not listed stays in English, so nothing ever breaks or shows a
+blank; it just has not been translated yet. Numbers, times, kyat amounts and
+people's names are never translated.
+
+Most of the interface is translated in one place: the shared components in
+`frontend/src/components/ui.tsx` (headings, cards, tiles, buttons, empty
+states, badges) run their text through the dictionary, so a screen does not
+have to know the language exists.
+
+### Dark mode
+
+`frontend/src/index.css` holds a full dark palette under `html.dark`. Every
+screen is built from the same colour tokens, so the switch repaints all of it,
+including the map — the tiles are dimmed slightly so the route line and the
+pins still read.
+
+---
+
+## 18. Version history
+
+**v6**
+
+- **The ferry is as simple as it can be.** A road now carries a monthly price,
+  a morning time, an optional evening time and the months it is sold for —
+  four fields. Per-day departures are gone completely: no timetable to publish,
+  no departure list to scroll, nothing to cancel or re-add. The bus runs those
+  two times every day of every month on sale. Three database tables went with
+  them (`trips`, `route_timetables`, `transport_payments`), and the agent's,
+  the student's and the office's ferry screens all got shorter.
+- **English ⇄ မြန်မာ and light ⇄ dark**, one click each, top-right, every role
+  (section 17).
+- **Big money is never cut off.** The dashboard tiles used to clip a figure
+  with an ellipsis, so an administrator holding Ks 100,000,000,000 saw a number
+  that was not the number. Tiles now step the text down in size as it grows and
+  scroll sideways as a last resort, with the full figure on the tooltip; money
+  columns in tables never wrap and their tables scroll.
+
+**v5**
+
+- **No ferry money passes through the app.** Accepting a seat used to take the
+  month's fare out of the student's wallet and record it against the agent.
+  Now it does nothing but confirm the seat: the student rings the agent on the
+  number shown on the road's card and sends the fare outside the app. The agent
+  holds no balance, the student's wallet is untouched, and the cash-flow screens
+  are canteen-only. The refund path is gone with it — there is nothing to
+  refund.
+- **The agent's phone number is now part of the ferry.** It travels with every
+  road and every waiting pass, as a tap-to-call link, and My Ferry warns the
+  agent while their Profile has no number on it.
+- **Any month the agent wants.** The month picker was a dropdown of three fixed
+  months; it is now a real month picker, from this month up to two years ahead.
+  A road is on sale to students for exactly the months it has a published
+  timetable — so an agent who plans six months ahead sells six months ahead.
 
 **v4**
 

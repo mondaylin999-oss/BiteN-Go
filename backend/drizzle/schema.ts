@@ -24,9 +24,7 @@ export const maintenanceFlagEnum = pgEnum("maintenance_flag", ["clear", "reporte
 export const maintenanceStatusEnum = pgEnum("maintenance_status", ["reported", "in_progress", "resolved"]);
 export const routeStatusEnum = pgEnum("route_status", ["active", "inactive"]);
 export const driverAvailabilityEnum = pgEnum("driver_availability", ["available", "unavailable"]);
-export const tripStatusEnum = pgEnum("trip_status", ["scheduled", "boarding", "in_progress", "completed", "cancelled"]);
 export const bookingStatusEnum = pgEnum("booking_status", ["pending", "confirmed", "cancelled"]);
-export const transportPayStatusEnum = pgEnum("transport_pay_status", ["charged", "refunded"]);
 
 // --- accounts --------------------------------------------------------------
 export const users = pgTable(
@@ -160,6 +158,12 @@ export const transportRoutes = pgTable(
     distanceKm: integer("distance_km"),
     estimatedMinutes: integer("estimated_minutes"),
     fareCents: integer("fare_cents").notNull(),
+    /** The same two times every day — no per-day departure rows exist. */
+    morningTime: varchar("morning_time", { length: 5 }).notNull().default("06:30"),
+    eveningTime: varchar("evening_time", { length: 5 }),
+    /** The months this road is sold for; sellTo null = a year from sellFrom. */
+    sellFrom: varchar("sell_from", { length: 7 }),
+    sellTo: varchar("sell_to", { length: 7 }),
     status: routeStatusEnum("status").notNull().default("active"),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
@@ -196,31 +200,11 @@ export const routeMapNodes = pgTable(
   ],
 );
 
-export const trips = pgTable(
-  "trips",
-  {
-    id: serial("id").primaryKey(),
-    routeId: integer("route_id").notNull(),
-    driverId: integer("driver_id").notNull(),
-    vehicleId: integer("vehicle_id").notNull(),
-    departureAt: timestamp("departure_at", { withTimezone: true }).notNull(),
-    arrivedAt: timestamp("arrived_at", { withTimezone: true }),
-    status: tripStatusEnum("status").notNull().default("scheduled"),
-    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
-    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
-  },
-  table => [
-    index("trips_driver_departure_idx").on(table.driverId, table.departureAt),
-    index("trips_route_departure_idx").on(table.routeId, table.departureAt),
-  ],
-);
-
 export const rideBookings = pgTable(
   "ride_bookings",
   {
     id: serial("id").primaryKey(),
     routeId: integer("route_id").notNull(),
-    tripId: integer("trip_id"),
     userId: integer("user_id").notNull(),
     /** The calendar month this seat is for, 'YYYY-MM' (Myanmar time). */
     month: varchar("month", { length: 7 }).notNull(),
@@ -232,7 +216,6 @@ export const rideBookings = pgTable(
     updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
   },
   table => [
-    index("ride_bookings_trip_idx").on(table.tripId, table.status),
     index("ride_bookings_user_idx").on(table.userId),
     index("ride_bookings_month_idx").on(table.routeId, table.month, table.status),
   ],
@@ -240,40 +223,8 @@ export const rideBookings = pgTable(
 
 /**
  * The daily timetable a road runs to for one month. Publishing one creates the
- * `trips` rows for every day of that month.
+ * every day it is sold for, at the two times written on the road.
  */
-export const routeTimetables = pgTable(
-  "route_timetables",
-  {
-    id: serial("id").primaryKey(),
-    routeId: integer("route_id").notNull(),
-    month: varchar("month", { length: 7 }).notNull(),
-    /** 'HH:MM,HH:MM' in Myanmar time, in order. */
-    times: text("times").notNull(),
-    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
-    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
-  },
-  table => [uniqueIndex("route_timetables_route_month_unique").on(table.routeId, table.month)],
-);
-
-export const transportPayments = pgTable(
-  "transport_payments",
-  {
-    id: serial("id").primaryKey(),
-    bookingId: integer("booking_id").notNull(),
-    transactionId: integer("transaction_id").notNull(),
-    amountCents: integer("amount_cents").notNull(),
-    status: transportPayStatusEnum("status").notNull().default("charged"),
-    refundedTransactionId: integer("refunded_transaction_id"),
-    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
-    refundedAt: timestamp("refunded_at", { withTimezone: true }),
-  },
-  table => [
-    uniqueIndex("transport_payments_booking_unique").on(table.bookingId),
-    uniqueIndex("transport_payments_transaction_unique").on(table.transactionId),
-  ],
-);
-
 export const vehicleMaintenance = pgTable(
   "vehicle_maintenance",
   {
@@ -304,7 +255,6 @@ export type RideBooking = typeof rideBookings.$inferSelect;
 export type DriverProfile = typeof driverProfiles.$inferSelect;
 export type RouteStop = typeof routeStops.$inferSelect;
 export type RouteMapNode = typeof routeMapNodes.$inferSelect;
-export type Trip = typeof trips.$inferSelect;
 export type VehicleMaintenance = typeof vehicleMaintenance.$inferSelect;
 
 export type Role = User["role"];

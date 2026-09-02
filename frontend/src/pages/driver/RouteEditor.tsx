@@ -1,7 +1,9 @@
 // ===========================================================================
 //  driver/RouteEditor.tsx — the transport agent's own route and its map.
 //
-//  The driver edits the stops, the fare and an optional external map link
+//  The agent's whole road in one screen: the stops, the monthly price, the two
+//  times the bus runs every day, the months it is sold for, and the line on the
+//  map. There is nothing per-day to fill in anywhere.
 //  assigned to them, and publishes the geographic nodes that draw the route
 //  line students see in Ferry Tracking.
 // ===========================================================================
@@ -30,10 +32,26 @@ export default function RouteEditor() {
   const [mapUrl, setMapUrl] = useState("");
   const [color, setColor] = useState("#0284C7");
   const [nodes, setNodes] = useState<NodeDraft[]>([]);
+  // The whole timetable: one time out in the morning, one back in the evening.
+  const [morningTime, setMorningTime] = useState("06:30");
+  const [eveningTime, setEveningTime] = useState("16:30");
+  // The months this road is sold for.
+  const [sellFrom, setSellFrom] = useState("");
+  const [sellTo, setSellTo] = useState("");
   // Filled in by the map: the real driving distance and time OSRM reports
   // for the published stops. Saved with the route so nobody has to guess.
   const [road, setRoad] = useState<{ km: number; minutes: number } | null>(null);
-  const [newRoad, setNewRoad] = useState({ name: "", startPoint: "", destination: "", stops: "", fareCents: "45000" });
+  const [newRoad, setNewRoad] = useState({
+    name: "",
+    startPoint: "",
+    destination: "",
+    stops: "",
+    fareCents: "45000",
+    morningTime: "06:30",
+    eveningTime: "16:30",
+    sellFrom: "",
+    sellTo: "",
+  });
 
   const routes: RouteRow[] = data?.routes ?? [];
   const selected = routes.find(row => row.route.id === selectedId) ?? routes[0] ?? null;
@@ -49,6 +67,10 @@ export default function RouteEditor() {
     setFare(String(selected.route.fareCents));
     setMapUrl(selected.route.mapUrl ?? "");
     setColor(selected.route.routeLineColor || "#0284C7");
+    setMorningTime(selected.route.morningTime || "06:30");
+    setEveningTime(selected.route.eveningTime ?? "");
+    setSellFrom(selected.route.sellFrom ?? "");
+    setSellTo(selected.route.sellTo ?? "");
     setRoad(null);
     setNodes(
       selected.mapNodes.length
@@ -76,6 +98,10 @@ export default function RouteEditor() {
           .filter(Boolean),
         fareCents: Math.round(Number(fare)),
         mapUrl: mapUrl.trim() || undefined,
+        morningTime,
+        eveningTime,
+        sellFrom: sellFrom || undefined,
+        sellTo,
         distanceKm: road?.km,
         estimatedMinutes: road?.minutes,
       });
@@ -133,6 +159,10 @@ export default function RouteEditor() {
                     .map(stop => stop.trim())
                     .filter(Boolean),
                   fareCents: Math.round(Number(newRoad.fareCents)),
+                  morningTime: newRoad.morningTime,
+                  eveningTime: newRoad.eveningTime,
+                  sellFrom: newRoad.sellFrom || undefined,
+                  sellTo: newRoad.sellTo || undefined,
                 })
                 .then(() => refresh())
                 .catch(caught => setMessage({ tone: "error", text: caught instanceof ApiError ? caught.message : "Could not open the road." }))
@@ -161,6 +191,18 @@ export default function RouteEditor() {
                 <Input value={newRoad.stops} onChange={event => setNewRoad({ ...newRoad, stops: event.target.value })} required placeholder="Library, Science Block, Sports Field" />
               </Field>
             </div>
+            <Field label="Leaves in the morning" hint="The same time every day.">
+              <Input type="time" value={newRoad.morningTime} onChange={event => setNewRoad({ ...newRoad, morningTime: event.target.value })} required />
+            </Field>
+            <Field label="Comes back in the evening" hint="Leave empty if it only runs once.">
+              <Input type="time" value={newRoad.eveningTime} onChange={event => setNewRoad({ ...newRoad, eveningTime: event.target.value })} />
+            </Field>
+            <Field label="Selling from" hint="Leave empty to start this month.">
+              <Input type="month" value={newRoad.sellFrom} onChange={event => setNewRoad({ ...newRoad, sellFrom: event.target.value })} />
+            </Field>
+            <Field label="Selling until" hint="Leave empty to sell a year ahead.">
+              <Input type="month" value={newRoad.sellTo} onChange={event => setNewRoad({ ...newRoad, sellTo: event.target.value })} />
+            </Field>
             <div className="sm:col-span-2">
               <Button type="submit" variant="ferry" busy={busy}>
                 <Plus className="h-4 w-4" /> Open the road
@@ -213,6 +255,22 @@ export default function RouteEditor() {
             <Field label="Pickup stops" hint="Separate with commas — they appear in order.">
               <Input value={stops} onChange={event => setStops(event.target.value)} required placeholder="Library, Science Block, Sports Field" />
             </Field>
+            <div className="grid gap-4 sm:grid-cols-2">
+              <Field label="Leaves in the morning" hint="The same time every day — this is the whole timetable.">
+                <Input type="time" value={morningTime} onChange={event => setMorningTime(event.target.value)} required />
+              </Field>
+              <Field label="Comes back in the evening" hint="Leave empty if the bus only runs once a day.">
+                <Input type="time" value={eveningTime} onChange={event => setEveningTime(event.target.value)} />
+              </Field>
+            </div>
+            <div className="grid gap-4 sm:grid-cols-2">
+              <Field label="Selling from" hint="Empty means from this month.">
+                <Input type="month" value={sellFrom} onChange={event => setSellFrom(event.target.value)} />
+              </Field>
+              <Field label="Selling until" hint="Empty means a year ahead.">
+                <Input type="month" value={sellTo} onChange={event => setSellTo(event.target.value)} />
+              </Field>
+            </div>
             <div className="grid gap-4 sm:grid-cols-2">
               <Field label="One seat for a month (kyat)" hint={`Now ${kyats(selected.route.fareCents)} a month`}>
                 <Input type="number" min={1} step={1} value={fare} onChange={event => setFare(event.target.value)} required />

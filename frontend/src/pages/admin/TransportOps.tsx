@@ -2,28 +2,28 @@
 //  admin/TransportOps.tsx — what the transport agents are running.
 //
 //  READ ONLY. The office opens and closes accounts (People) and watches the
-//  ferry from here; the buses, the roads, the monthly timetables and the seats
+//  ferry from here; the buses, the roads, the daily times and the monthly seats
 //  belong to the transport agents themselves.
 // ===========================================================================
 
 import { Bus, Wrench } from "lucide-react";
-import { api, type DriverRow, type MaintenanceRow, type RouteRow, type TripRow, type VehicleRow } from "@/lib/api";
+import { api, type DriverRow, type MaintenanceRow, type RoadRow, type SeatRow, type VehicleRow } from "@/lib/api";
 import { useApiData } from "@/hooks/useApiData";
-import { clock, day, kyats } from "@/lib/format";
+import { kyats, monthName } from "@/lib/format";
 import { Badge, Card, EmptyState, ErrorNote, PageHeader, Spinner, StatTile, StatusBadge } from "@/components/ui";
 
-type Bundle = { vehicles: VehicleRow[]; routes: RouteRow[]; trips: TripRow[]; drivers: DriverRow[]; maintenance: MaintenanceRow[] };
+type Bundle = { vehicles: VehicleRow[]; roads: RoadRow[]; seats: SeatRow[]; drivers: DriverRow[]; maintenance: MaintenanceRow[] };
 
 export default function TransportOps() {
   const { data, loading, error, refresh } = useApiData<Bundle>(async () => {
-    const [vehicles, routes, trips, drivers, maintenance] = await Promise.all([
+    const [vehicles, roads, seats, drivers, maintenance] = await Promise.all([
       api.get<{ vehicles: VehicleRow[] }>("/transport/vehicles"),
-      api.get<{ routes: RouteRow[] }>("/transport/routes"),
-      api.get<{ trips: TripRow[] }>("/transport/trips"),
+      api.get<{ roads: RoadRow[] }>("/transport/roads"),
+      api.get<{ seats: SeatRow[] }>("/transport/seats"),
       api.get<{ drivers: DriverRow[] }>("/transport/drivers"),
       api.get<{ maintenance: MaintenanceRow[] }>("/transport/maintenance"),
     ]);
-    return { vehicles: vehicles.vehicles, routes: routes.routes, trips: trips.trips, drivers: drivers.drivers, maintenance: maintenance.maintenance };
+    return { vehicles: vehicles.vehicles, roads: roads.roads, seats: seats.seats, drivers: drivers.drivers, maintenance: maintenance.maintenance };
   }, []);
 
   if (loading) return <Spinner label="Loading transport operations…" />;
@@ -36,13 +36,13 @@ export default function TransportOps() {
     <>
       <PageHeader
         title="Transport"
-        subtitle="What the transport agents are running. The office opens and closes accounts; the agents own their own buses, roads, timetables and seats."
+        subtitle="What the transport agents are running. The office opens and closes accounts; the agents own their own buses, roads, times and seats."
       />
 
       <div className="grid gap-stack-md sm:grid-cols-2 lg:grid-cols-4">
         <StatTile label="Ferry buses" value={data.vehicles.length} tone="ferry" icon={<Bus className="h-4 w-4" />} />
-        <StatTile label="Roads" value={data.routes.length} tone="ferry" />
-        <StatTile label="Departures to come" value={data.trips.filter(trip => ["scheduled", "boarding", "in_progress"].includes(trip.trip.status)).length} />
+        <StatTile label="Roads" value={data.roads.length} tone="ferry" />
+        <StatTile label="Monthly seats" value={data.seats.filter(row => row.pass.status === "confirmed").length} hint={`${data.seats.filter(row => row.pass.status === "pending").length} waiting for an agent`} />
         <StatTile label="Open issues" value={openIssues.length} tone={openIssues.length ? "error" : "neutral"} icon={<Wrench className="h-4 w-4" />} />
       </div>
 
@@ -85,24 +85,25 @@ export default function TransportOps() {
         )}
       </Card>
 
-      <Card title="Routes">
-        {data.routes.length === 0 ? (
+      <Card title="Roads">
+        {data.roads.length === 0 ? (
           <EmptyState title="No routes yet" description="A route needs a start, a destination and at least one pickup stop." />
         ) : (
           <div className="overflow-x-auto">
             <table className="data-table">
               <thead>
                 <tr>
-                  <th>Route</th>
+                  <th>Road</th>
                   <th>Stops</th>
-                  <th className="text-right">Fare</th>
-                  <th>Driver</th>
+                  <th>Every day</th>
+                  <th className="text-right">Seat / month</th>
+                  <th>Agent</th>
                   <th>Map</th>
                   <th>Status</th>
                 </tr>
               </thead>
               <tbody>
-                {data.routes.map(row => (
+                {data.roads.map(row => (
                   <tr key={row.route.id}>
                     <td>
                       <p className="font-semibold text-on-surface">{row.route.name}</p>
@@ -111,6 +112,10 @@ export default function TransportOps() {
                       </p>
                     </td>
                     <td className="max-w-[220px] text-[13px] text-on-surface-variant">{row.stops.map(stop => stop.name).join(", ") || row.route.pickupLocations}</td>
+                    <td className="tabular whitespace-nowrap text-[13px]">
+                      {row.route.morningTime}
+                      {row.route.eveningTime ? ` · ${row.route.eveningTime}` : ""}
+                    </td>
                     <td className="tabular text-right">{kyats(row.route.fareCents)}</td>
                     <td>{row.driverName ?? <span className="text-on-surface-variant">unassigned</span>}</td>
                     <td>{row.mapNodes.length ? <Badge tone="ferry">{row.mapNodes.length} nodes</Badge> : <span className="text-[12px] text-on-surface-variant">not drawn</span>}</td>
@@ -125,35 +130,32 @@ export default function TransportOps() {
         )}
       </Card>
 
-      <Card title="Departures">
-        {data.trips.length === 0 ? (
-          <EmptyState title="Nothing scheduled" description="Transport agents publish a timetable for the month; the departures show up here." />
+      <Card title="Monthly seats" subtitle="Who has a seat on which road, for which month. The fare is settled between the student and the agent.">
+        {data.seats.length === 0 ? (
+          <EmptyState title="No seats yet" description="Students ask for a seat from their Ferry screen; the agent accepts it." />
         ) : (
           <div className="overflow-x-auto">
             <table className="data-table">
               <thead>
                 <tr>
-                  <th>When</th>
-                  <th>Route</th>
-                  <th>Driver</th>
+                  <th>Month</th>
+                  <th>Road</th>
+                  <th>Student</th>
                   <th className="text-right">Seats</th>
+                  <th className="text-right">Agreed fare</th>
                   <th>Status</th>
                 </tr>
               </thead>
               <tbody>
-                {data.trips.map(trip => (
-                  <tr key={trip.trip.id}>
-                    <td className="tabular whitespace-nowrap">
-                      {day(trip.trip.departureAt)} {clock(trip.trip.departureAt)}
-                    </td>
-                    <td>{trip.route.name}</td>
-                    <td>{trip.driverName ?? "—"}</td>
-                    <td className="tabular text-right">
-                      {trip.occupiedSeats}/{trip.vehicle.totalSeats}
-                      {trip.pendingSeats ? <span className="text-on-surface-variant"> (+{trip.pendingSeats})</span> : null}
-                    </td>
+                {data.seats.slice(0, 40).map(row => (
+                  <tr key={row.pass.id}>
+                    <td className="tabular whitespace-nowrap">{monthName(row.pass.month)}</td>
+                    <td>{row.route?.name ?? "—"}</td>
+                    <td>{row.passengerName ?? row.passengerUsername ?? "—"}</td>
+                    <td className="tabular text-right">{row.pass.seatCount}</td>
+                    <td className="tabular text-right">{kyats(row.pass.fareCents)}</td>
                     <td>
-                      <StatusBadge status={trip.trip.status} />
+                      <StatusBadge status={row.pass.status} />
                     </td>
                   </tr>
                 ))}

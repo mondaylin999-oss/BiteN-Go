@@ -6,7 +6,7 @@
 
 import { useState, type FormEvent } from "react";
 import { Banknote, Bus, TrendingUp, UtensilsCrossed, Wallet } from "lucide-react";
-import { api, ApiError, type AgentPosition, type FlowSummary, type MonthRow, type OrderRow, type SessionUser, type TripRow } from "@/lib/api";
+import { api, ApiError, type AgentPosition, type FlowSummary, type MonthRow, type OrderRow, type RoadRow, type SessionUser } from "@/lib/api";
 import { useApiData } from "@/hooks/useApiData";
 import { clock, day, kyats, monthName, percent } from "@/lib/format";
 import { Button, Card, EmptyState, ErrorNote, Field, Input, Notice, PageHeader, Select, Spinner, StatTile, StatusBadge } from "@/components/ui";
@@ -16,18 +16,18 @@ type Bundle = {
   agents: AgentPosition[];
   months: MonthRow[];
   orders: OrderRow[];
-  trips: TripRow[];
+  roads: RoadRow[];
   participants: SessionUser[];
 };
 
 export default function AdminOverview() {
   const { data, loading, error, refresh } = useApiData<Bundle>(async () => {
-    const [overview, adminFlow, monthly, orders, trips, participants] = await Promise.all([
+    const [overview, adminFlow, monthly, orders, roads, participants] = await Promise.all([
       api.get<{ summary: FlowSummary }>("/cashflow/overview"),
       api.get<{ agents: AgentPosition[] }>("/cashflow/admin-flow"),
       api.get<{ months: MonthRow[] }>("/cashflow/monthly"),
       api.get<{ orders: OrderRow[] }>("/canteen/orders"),
-      api.get<{ trips: TripRow[] }>("/transport/trips"),
+      api.get<{ roads: RoadRow[] }>("/transport/roads"),
       api.get<{ participants: SessionUser[] }>("/cashflow/participants"),
     ]);
     return {
@@ -35,7 +35,7 @@ export default function AdminOverview() {
       agents: adminFlow.agents,
       months: monthly.months,
       orders: orders.orders,
-      trips: trips.trips,
+      roads: roads.roads,
       participants: participants.participants,
     };
   }, []);
@@ -68,7 +68,9 @@ export default function AdminOverview() {
   if (!data) return null;
 
   const openOrders = data.orders.filter(order => !["completed", "cancelled"].includes(order.status));
-  const upcomingTrips = data.trips.filter(trip => ["scheduled", "boarding", "in_progress"].includes(trip.trip.status));
+  // Roads running, and how many monthly seats are sold on them right now.
+  const runningRoads = data.roads.filter(road => road.route.status === "active");
+  const seatsSold = data.roads.reduce((sum, road) => sum + (road.months[0]?.occupiedSeats ?? 0), 0);
   const activeAgents = data.participants.filter(person => person.role === "agent" && person.status === "active");
 
   return (
@@ -169,31 +171,35 @@ export default function AdminOverview() {
           </div>
         </Card>
 
-        <Card title="Ferry right now" accent="ferry" subtitle={`${upcomingTrips.length} upcoming departure(s)`}>
-          {upcomingTrips.length === 0 ? (
-            <EmptyState title="No departures scheduled" description="Schedule one in Transport Ops." />
+        <Card title="Ferry right now" accent="ferry" subtitle={`${runningRoads.length} road(s) running · ${seatsSold} seat(s) sold this month`}>
+          {data.roads.length === 0 ? (
+            <EmptyState title="No ferry road yet" description="A transport agent opens their own road; the office only opens accounts." />
           ) : (
             <ul className="space-y-2">
-              {upcomingTrips.slice(0, 6).map(trip => (
-                <li key={trip.trip.id} className="flex items-center justify-between gap-3 border-b border-surface-container-high pb-2 last:border-0">
-                  <div className="min-w-0">
-                    <p className="truncate text-[14px] font-semibold">{trip.route.name}</p>
-                    <p className="tabular text-[12px] text-on-surface-variant">
-                      {day(trip.trip.departureAt)} {clock(trip.trip.departureAt)} · {trip.driverName ?? "—"}
-                    </p>
-                  </div>
-                  <div className="flex shrink-0 items-center gap-2">
-                    <span className="tabular text-[13px]">
-                      {trip.occupiedSeats}/{trip.vehicle.totalSeats}
-                    </span>
-                    <StatusBadge status={trip.trip.status} />
-                  </div>
-                </li>
-              ))}
+              {data.roads.slice(0, 6).map(road => {
+                const month = road.months[0];
+                return (
+                  <li key={road.route.id} className="flex items-center justify-between gap-3 border-b border-surface-container-high pb-2 last:border-0">
+                    <div className="min-w-0">
+                      <p className="truncate text-[14px] font-semibold">{road.route.name}</p>
+                      <p className="tabular text-[12px] text-on-surface-variant">
+                        Every day {road.route.morningTime}
+                        {road.route.eveningTime ? ` · ${road.route.eveningTime}` : ""} · {road.driverName ?? "—"}
+                      </p>
+                    </div>
+                    <div className="flex shrink-0 items-center gap-2">
+                      <span className="tabular text-[13px]">
+                        {month ? `${month.occupiedSeats}/${month.totalSeats}` : "—"}
+                      </span>
+                      <StatusBadge status={road.route.status} />
+                    </div>
+                  </li>
+                );
+              })}
             </ul>
           )}
           <div className="mt-3 flex items-center gap-2 text-[13px] text-on-surface-variant">
-            <Bus className="h-4 w-4" /> {data.trips.length} trips in total
+            <Bus className="h-4 w-4" /> {data.roads.length} ferry road{data.roads.length === 1 ? "" : "s"}
           </div>
         </Card>
       </div>

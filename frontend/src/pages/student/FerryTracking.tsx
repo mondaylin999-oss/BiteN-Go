@@ -108,7 +108,8 @@ export default function FerryTracking() {
             if (!month) return null;
             const wanted = seats[road.route.id] ?? 1;
             const own = month.ownPass;
-            const times = month.timetable ? month.timetable.split(",") : [];
+            // The whole timetable: the same two times every day.
+            const times = [road.route.morningTime, road.route.eveningTime].filter(Boolean) as string[];
 
             return (
               <Card
@@ -191,11 +192,10 @@ export default function FerryTracking() {
 
                     <div className="flex flex-wrap items-center gap-2 text-[13px] text-on-surface-variant">
                       <Clock className="h-4 w-4 text-tertiary" />
-                      {times.length ? (
-                        <span className="tabular">Runs every day at {times.join(" · ")}</span>
-                      ) : (
-                        <span>No timetable published for {monthName(month.month)} yet.</span>
-                      )}
+                      <span className="tabular">
+                        Every day · leaves {times[0]}
+                        {times[1] ? ` · comes back ${times[1]}` : ""}
+                      </span>
                     </div>
 
                     {own ? (
