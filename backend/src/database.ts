@@ -51,17 +51,59 @@ export async function pingDatabase(): Promise<{ ok: boolean; error?: string; ser
   }
 }
 
+/**
+ * The tables the backend cannot run without. Derived checks only — never a
+ * hard-coded count: an earlier version compared "how many of these 8 exist"
+ * against the number 9, so the backend refused to start no matter how
+ * correctly the database had been set up.
+ */
+const REQUIRED_TABLES = [
+  "users",
+  "transactions",
+  "food_items",
+  "orders",
+  "order_items",
+  "vehicles",
+  "transport_routes",
+  "ride_bookings",
+] as const;
+
+/** Where this backend is actually looking, in words the message can print. */
+async function describeConnection() {
+  try {
+    const row = (
+      await getPool().query(
+        "SELECT current_database() AS db, current_user AS who, coalesce(inet_server_addr()::text, 'localhost') AS host, inet_server_port() AS port",
+      )
+    ).rows[0];
+    return `database "${row?.db}" on ${row?.host}:${row?.port} as user "${row?.who}"`;
+  } catch {
+    return "the database in backend/.env (DATABASE_URL)";
+  }
+}
+
 /** Fails loudly at startup when schema.sql has not been run yet. */
 export async function assertSchemaInstalled() {
   const result = await getPool().query(
-    "SELECT COUNT(*)::int AS present FROM information_schema.tables WHERE table_schema = 'public' AND table_name IN ('users','transactions','food_items','orders','order_items','vehicles','transport_routes','ride_bookings')",
+    "SELECT table_name FROM information_schema.tables WHERE table_schema = 'public' AND table_name = ANY($1::text[])",
+    [REQUIRED_TABLES as unknown as string[]],
   );
-  const present = Number(result.rows[0]?.present ?? 0);
-  if (present < 9) {
+  const found = new Set(result.rows.map(row => String(row.table_name)));
+  const missing = REQUIRED_TABLES.filter(table => !found.has(table));
+
+  if (missing.length) {
+    const where = await describeConnection();
     throw new Error(
-      "The BiteN Go tables are missing from this database.\n" +
-        "  Open database/schema.sql in the pgAdmin4 Query Tool and run it,\n" +
-        "  or:  psql -U postgres -d biten_go_db -f database/schema.sql\n" +
+      `The BiteN Go tables are missing from ${where}.\n` +
+        `  Missing: ${missing.join(", ")}\n` +
+        `  Found:   ${found.size ? Array.from(found).sort().join(", ") : "none of them"}\n` +
+        "\n" +
+        "  If you HAVE run database/schema.sql, you almost certainly ran it while\n" +
+        "  connected to a different database than the one named above — in pgAdmin4\n" +
+        "  click the right database first, then Tools -> Query Tool.\n" +
+        "\n" +
+        "  Otherwise run it now:\n" +
+        "    psql -U postgres -d biten_go_db -f database/schema.sql\n" +
         "  (See README.md section 3.)",
     );
   }

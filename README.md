@@ -11,7 +11,7 @@
 >   account. An agent confirms a payment on their computer → the student's
 >   wallet changes on the student's phone.
 > - **PostgreSQL instead of the managed/MySQL database.** `database/schema.sql`
->   is written for pgAdmin4 and creates all 14 tables.
+>   is written for pgAdmin4 and creates all 12 tables.
 > - **Nothing from the hosting platform is left.** No Manus SDK, no hosted
 >   OAuth, no cloud storage, no LLM calls — the app owns its own accounts and
 >   runs completely on your own computer.
@@ -177,7 +177,7 @@ createdb -U postgres biten_go_db
 2. Press the folder icon and open `database/schema.sql` from this project.
 3. Press **F5** (or ▶). It prints a few "already exists, skipping" notices if
    you run it twice — that is fine, the script is written to be re-runnable.
-4. Refresh **Schemas → public → Tables**: **14 tables** appear.
+4. Refresh **Schemas → public → Tables**: **12 tables** appear.
 
 **Or on the command line:**
 
@@ -930,6 +930,18 @@ pins still read.
 ---
 
 ## 18. Version history
+
+**v6.1**
+
+- **Fixed: the backend refused to start even with a correct database.** The
+  startup check counted how many of **8** required tables were present and then
+  demanded **9** — a number left behind when `trips` was removed — so
+  `The BiteN Go tables are missing from this database` appeared no matter what.
+  The check now derives everything from the list itself, and when tables really
+  are missing it names them *and* prints the database, host, port and user it
+  actually connected to — which is the answer when schema.sql was run against
+  the wrong database. `verify/verify_schema.sh` expected 14 tables too; the
+  ferry simplification left 12.
 
 **v6**
 
