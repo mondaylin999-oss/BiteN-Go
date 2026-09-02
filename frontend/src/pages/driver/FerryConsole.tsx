@@ -10,7 +10,7 @@
 // ===========================================================================
 
 import { useState, type FormEvent } from "react";
-import { Bus, CalendarPlus, CheckCircle2, Clock, Users, Wrench, XCircle } from "lucide-react";
+import { Bus, CalendarPlus, CheckCircle2, Clock, Users, Wrench, X, XCircle } from "lucide-react";
 import { api, ApiError, type DriverDashboard, type RoadRow } from "@/lib/api";
 import { useApiData } from "@/hooks/useApiData";
 import { kyats, monthName, monthShort } from "@/lib/format";
@@ -196,7 +196,10 @@ export default function FerryConsole() {
       </Card>
 
       {/* ---------- the month, road by road ---------- */}
-      <Card title="My roads, month by month" subtitle="How many seats are sold in each month you are selling.">
+      <Card
+        title="My roads, month by month"
+        subtitle="How many seats are sold in each month you are selling. Remove a month from either end to shorten the list."
+      >
         {myRoads.length === 0 ? (
           <EmptyState title="No road yet" description="Open your road in Road & Map — the fee, the two daily times and the months you sell all live there." />
         ) : (
@@ -214,16 +217,48 @@ export default function FerryConsole() {
                   <Badge tone="ferry">{kyats(road.route.fareCents)} / seat / month</Badge>
                 </div>
                 <div className="grid gap-2 sm:grid-cols-3">
-                  {road.months.map(month => (
-                    <div key={month.month} className="rounded-lg bg-surface-container-low px-3 py-2">
-                      <p className="text-[13px] font-semibold text-on-surface">{monthName(month.month)}</p>
-                      <p className="tabular text-[12px] text-on-surface-variant">
-                        {month.occupiedSeats}/{month.totalSeats} sold
-                        {month.pendingSeats ? ` · ${month.pendingSeats} waiting` : ""}
-                      </p>
-                      <p className="tabular text-[12px] font-semibold text-tertiary">{kyats(month.occupiedSeats * road.route.fareCents)} taken</p>
-                    </div>
-                  ))}
+                  {road.months.map((month, index) => {
+                    // A road is sold as a run of months, so a month can be
+                    // taken off sale from either END of that run. Showing the
+                    // × only there means the agent never meets the refusal.
+                    const atAnEnd = index === 0 || index === road.months.length - 1;
+                    const held = month.occupiedSeats + month.pendingSeats;
+                    const canRemove = atAnEnd && held === 0;
+
+                    return (
+                      <div key={month.month} className="relative rounded-lg bg-surface-container-low px-3 py-2">
+                        {canRemove ? (
+                          <button
+                            type="button"
+                            className="absolute right-1.5 top-1.5 rounded-full p-1 text-on-surface-variant hover:bg-error-container hover:text-on-error-container"
+                            aria-label={`Stop selling ${monthName(month.month)}`}
+                            title={`Stop selling ${monthName(month.month)}`}
+                            disabled={busy === `month-${road.route.id}-${month.month}`}
+                            onClick={() =>
+                              void act(
+                                `month-${road.route.id}-${month.month}`,
+                                () => api.delete(`/transport/driver/routes/${road.route.id}/months/${month.month}`),
+                                `${monthName(month.month)} is no longer on sale.`,
+                              )
+                            }
+                          >
+                            <X className="h-3.5 w-3.5" />
+                          </button>
+                        ) : null}
+
+                        <p className="pr-6 text-[13px] font-semibold text-on-surface">{monthName(month.month)}</p>
+                        <p className="tabular text-[12px] text-on-surface-variant">
+                          {month.occupiedSeats}/{month.totalSeats} sold
+                          {month.pendingSeats ? ` · ${month.pendingSeats} waiting` : ""}
+                        </p>
+                        <p className="tabular text-[12px] font-semibold text-tertiary">{kyats(month.occupiedSeats * road.route.fareCents)} taken</p>
+
+                        {atAnEnd && held > 0 ? (
+                          <p className="mt-1 text-[11px] text-on-surface-variant">Seats are taken — cancel them to remove this month.</p>
+                        ) : null}
+                      </div>
+                    );
+                  })}
                 </div>
               </div>
             ))}

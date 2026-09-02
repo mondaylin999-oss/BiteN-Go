@@ -11,10 +11,11 @@
 //    Student                   asks for a seat for a whole month, and gives it
 //                              back.
 // ===========================================================================
-
+ 
 import { Router } from "express";
 import { z } from "zod";
 import {
+  closeRoadMonth,
   monthsOnSale,
   cancelOwnMonthlySeat,
   createOwnRoute,
@@ -38,13 +39,13 @@ import {
   updateOwnVehicleCapacity,
 } from "../transport.js";
 import { forbidden, parseBody, parseId, requireRole, requireUser, route } from "../http.js";
-
+ 
 export const transportRouter = Router();
-
+ 
 const monthSchema = z.string().regex(/^\d{4}-(0[1-9]|1[0-2])$/, "Choose a month like 2026-09.");
-
+ 
 // --- shared reads ----------------------------------------------------------
-
+ 
 transportRouter.get(
   "/routes",
   route(async req => {
@@ -53,7 +54,7 @@ transportRouter.get(
     return { routes: user.role === "driver" ? rows.filter(row => row.route.driverId === user.id) : rows };
   }),
 );
-
+ 
 /** The months on sale, with the seat position of every road in each. */
 transportRouter.get(
   "/roads",
@@ -65,7 +66,7 @@ transportRouter.get(
     };
   }),
 );
-
+ 
 /** Monthly seats: a student sees their own, an agent sees their road's, the
  *  administrator sees all of them. */
 transportRouter.get(
@@ -77,7 +78,7 @@ transportRouter.get(
     return { seats: await listMonthlySeats({}) };
   }),
 );
-
+ 
 transportRouter.get(
   "/drivers",
   route(async req => {
@@ -85,7 +86,7 @@ transportRouter.get(
     return { drivers: await listDrivers() };
   }),
 );
-
+ 
 transportRouter.get(
   "/vehicles",
   route(async req => {
@@ -94,7 +95,7 @@ transportRouter.get(
     return { vehicles: user.role === "driver" ? rows.filter(row => row.vehicle.driverId === user.id) : rows };
   }),
 );
-
+ 
 transportRouter.get(
   "/maintenance",
   route(async req => {
@@ -108,9 +109,9 @@ transportRouter.get(
     throw forbidden("Maintenance reports are for the transport agent and the office.");
   }),
 );
-
+ 
 // --- the transport agent's own ferry ---------------------------------------
-
+ 
 transportRouter.get(
   "/driver/dashboard",
   route(async req => {
@@ -118,7 +119,7 @@ transportRouter.get(
     return getDriverDashboard(driver.id);
   }),
 );
-
+ 
 transportRouter.get(
   "/driver/profile",
   route(async req => {
@@ -127,7 +128,7 @@ transportRouter.get(
     return { profile: await getDriverProfile(driver.id) };
   }),
 );
-
+ 
 transportRouter.patch(
   "/driver/profile",
   route(async req => {
@@ -143,7 +144,7 @@ transportRouter.patch(
     return { profile: await updateOwnDriverProfile(driver.id, input) };
   }),
 );
-
+ 
 /** Register my ferry bus (once). */
 transportRouter.post(
   "/driver/vehicle",
@@ -162,7 +163,7 @@ transportRouter.post(
     return { id: await createOwnVehicle(driver.id, input) };
   }),
 );
-
+ 
 transportRouter.patch(
   "/driver/vehicle-capacity",
   route(async req => {
@@ -173,7 +174,7 @@ transportRouter.patch(
     return { success: true };
   }),
 );
-
+ 
 /** Open a road of my own. */
 transportRouter.post(
   "/driver/routes",
@@ -202,7 +203,7 @@ transportRouter.post(
     return { id: await createOwnRoute(driver.id, input) };
   }),
 );
-
+ 
 transportRouter.patch(
   "/driver/routes/:id",
   route(async req => {
@@ -233,7 +234,7 @@ transportRouter.patch(
     return { success: true };
   }),
 );
-
+ 
 transportRouter.post(
   "/driver/routes/:id/map",
   route(async req => {
@@ -253,7 +254,19 @@ transportRouter.post(
     return { success: true };
   }),
 );
-
+ 
+/** Take one month off sale — the agent shortening their own month list. */
+transportRouter.delete(
+  "/driver/routes/:id/months/:month",
+  route(async req => {
+    const driver = requireRole(req, "driver");
+    const month = monthSchema.parse(String(req.params.month));
+    const removed = await closeRoadMonth(driver.id, parseId(req.params.id), month);
+    if (!removed) throw forbidden("You can only change your own road.");
+    return { success: true };
+  }),
+);
+ 
 /** Accept or refuse a student's monthly seat. */
 transportRouter.patch(
   "/driver/seats/:id",
@@ -265,7 +278,7 @@ transportRouter.patch(
     return { success: true };
   }),
 );
-
+ 
 transportRouter.post(
   "/driver/maintenance",
   route(async req => {
@@ -274,7 +287,7 @@ transportRouter.post(
     return { id: await reportVehicleIssue({ driverId: driver.id, ...input }) };
   }),
 );
-
+ 
 /** The agent closes off their own maintenance report once the bus is back. */
 transportRouter.patch(
   "/driver/maintenance/:id",
@@ -285,9 +298,9 @@ transportRouter.patch(
     return { success: true };
   }),
 );
-
+ 
 // --- student ---------------------------------------------------------------
-
+ 
 /** Ask for one seat on one road for a whole month. */
 transportRouter.post(
   "/seats",
@@ -304,7 +317,7 @@ transportRouter.post(
     return requestMonthlySeat({ userId: student.id, ...input });
   }),
 );
-
+ 
 transportRouter.delete(
   "/seats/:id",
   route(async req => {
@@ -314,3 +327,4 @@ transportRouter.delete(
     return { success: true };
   }),
 );
+ 

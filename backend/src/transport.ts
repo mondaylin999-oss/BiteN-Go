@@ -756,6 +756,45 @@ export async function cancelOwnMonthlySeat(passId: number, userId: number) {
   return true;
 }
 
+/**
+ * The agent takes one month off sale.
+ *
+ * A road is sold as a run of months — a first month and a last one — so a
+ * month can be removed from either END of that run, which is what shortens the
+ * list on the agent's screen. Taking a month out of the MIDDLE would leave a
+ * hole the run cannot describe, so that is refused with a plain message; the
+ * agent can always reset the whole window in Road & Map instead.
+ *
+ * A month that students have already taken seats in is never removed silently:
+ * those seats have to be dealt with first.
+ */
+export async function closeRoadMonth(driverId: number, routeId: number, month: string) {
+  if (!isMonthKey(month)) fail("Choose a month.");
+
+  const road = await roadWithVehicle(routeId);
+  if (!road || road.route.driverId !== driverId) return false;
+
+  const current = yangonMonthKey();
+  const from = road.route.sellFrom && road.route.sellFrom > current ? road.route.sellFrom : current;
+  const to = road.route.sellTo && road.route.sellTo >= from ? road.route.sellTo : addMonths(from, DEFAULT_MONTHS_ON_SALE - 1);
+
+  if (month < from || month > to) fail("That month is not on sale.");
+
+  const taken = await db()
+    .select({ id: rideBookings.id })
+    .from(rideBookings)
+    .where(and(eq(rideBookings.routeId, routeId), eq(rideBookings.month, month), inArray(rideBookings.status, REQUEST_STATUSES)));
+  if (taken.length)
+    fail(`${taken.length} seat${taken.length === 1 ? " is" : "s are"} already taken for that month. Cancel ${taken.length === 1 ? "it" : "them"} first, then remove the month.`);
+
+  if (month !== from && month !== to)
+    fail("Remove a month from either end of the list. The months in between are sold as one run — to leave a gap, set the months again in Road & Map.");
+
+  const patch = month === from ? { sellFrom: addMonths(month, 1) } : { sellTo: addMonths(month, -1) };
+  await db().update(transportRoutes).set(patch).where(eq(transportRoutes.id, routeId));
+  return true;
+}
+
 export async function listMonthlySeats(input: { routeId?: number; driverId?: number; userId?: number; month?: string }) {
   const conditions = [];
   if (input.routeId) conditions.push(eq(rideBookings.routeId, input.routeId));
