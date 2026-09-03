@@ -12,6 +12,7 @@
     "serve": "node dist/src/index.js",
     "check": "tsc --noEmit",
     "seed": "tsx src/seed.ts",
+    "check:storage": "tsx src/check-storage.ts",
     "engine:build": "bash cpp/build.sh",
     "test": "vitest run"
   },

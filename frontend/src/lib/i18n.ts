@@ -173,7 +173,6 @@ export const MYANMAR: Record<string, string> = {
   "Place pre-order": "ကြိုတင်မှာယူရန်",
   "Pre-orders open": "ကြိုတင်မှာယူချိန် ဖွင့်ထားသည်",
   "Window closed": "မှာယူချိန် ပိတ်ထားသည်",
-  "Add a dish": "အစားအစာ ထည့်ရန်",
   "Open orders": "ပြီးမြောက်ရန် ကျန်သော မှာယူမှုများ",
   Incoming: "အသစ်ဝင်လာသည်",
   "Mark ready": "အဆင်သင့် အဖြစ် မှတ်ရန်",

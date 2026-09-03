@@ -683,7 +683,6 @@ export async function requestMonthlySeat(input: { routeId: number; userId: numbe
     .insert(rideBookings)
     .values({
       routeId: input.routeId,
-      tripId: null,
       userId: input.userId,
       month: input.month,
       seatCount: input.seatCount,

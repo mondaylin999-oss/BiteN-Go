@@ -6,6 +6,8 @@ node_modules/
 .env
 .env.local
 *.env.backup
+.env.*
+!.env.example
 
 # builds
 dist/

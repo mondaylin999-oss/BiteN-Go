@@ -163,12 +163,22 @@ export async function request<T>(pathname: string, options: RequestOptions = {})
   const payload = text ? safeJson(text) : null;
 
   if (!response.ok) {
-    const message = (payload && typeof payload === "object" && "error" in payload && String((payload as any).error)) || `Request failed (${response.status}).`;
+    const message = errorMessage(payload, `Request failed (${response.status}).`);
     if (response.status === 401) setToken(null);
     throw new ApiError(response.status, message);
   }
 
   return payload as T;
+}
+
+/** The API always answers a failure with { error: "..." }; fall back to a
+ *  generic line when the body is empty or is not that shape. */
+function errorMessage(payload: unknown, fallback: string): string {
+  if (payload && typeof payload === "object" && "error" in payload) {
+    const value = (payload as { error: unknown }).error;
+    if (value) return String(value);
+  }
+  return fallback;
 }
 
 function safeJson(text: string): unknown {
