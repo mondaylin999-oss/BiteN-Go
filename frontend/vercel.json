@@ -3,7 +3,5 @@
   "framework": "vite",
   "buildCommand": "npm run build",
   "outputDirectory": "dist",
-
-  "// rewrites": "The app routes on the client (wouter), so a reload on /agent/menu must still be served index.html. Vercel matches real files first, so assets are unaffected.",
   "rewrites": [{ "source": "/(.*)", "destination": "/index.html" }]
 }
