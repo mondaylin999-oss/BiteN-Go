@@ -1,0 +1,10 @@
+# Keep the build context small, and keep host-built artefacts out of the
+# image — a Windows .exe or a Windows node_modules would be useless inside a
+# Linux container, and copying them in would quietly shadow the real build.
+node_modules
+dist
+cpp/build
+.env
+.env.*
+!.env.example
+*.log

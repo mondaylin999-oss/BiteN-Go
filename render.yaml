@@ -19,22 +19,16 @@
 services:
   - type: web
     name: biten-go-api
-    runtime: node
+    # Docker, not the native Node runtime: Render's Node image carries no C++
+    # toolchain, so cpp/build.sh had nothing to compile with and the deploy
+    # failed. The image installs g++ and cmake itself, which is what lets the
+    # deployed API run the real C++ engine rather than the TypeScript twin.
+    # Everything about how it is built now lives in backend/Dockerfile.
+    runtime: docker
+    dockerfilePath: ./backend/Dockerfile
+    dockerContext: ./backend
     plan: free
     region: singapore # closest of Render's regions to Myanmar
-    rootDir: backend
-
-    # cpp/build.sh picks its own generator, so this works with or without
-    # cmake on the image. BITEN_ENGINE_REQUIRED below then refuses to start
-    # if the binary is somehow missing, rather than quietly falling back.
-    # --include=dev is required: NODE_ENV=production below applies to the
-    # BUILD as well as the run, and npm then skips devDependencies - where
-    # typescript and every @types package lives. Without it tsc runs with no
-    # declarations and the build dies on "Could not find a declaration file
-    # for module express". Only dist/ is used at runtime, so nothing extra
-    # ships to the running service.
-    buildCommand: npm ci --include=dev && bash cpp/build.sh && npm run build
-    startCommand: npm run serve
 
     healthCheckPath: /health
 
