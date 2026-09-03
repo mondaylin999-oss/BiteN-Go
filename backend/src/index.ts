@@ -97,6 +97,18 @@ app.use(errorMiddleware);
 async function start() {
   assertEnv();
 
+  // BITEN_ENGINE_REQUIRED=true means "do not quietly serve the TypeScript
+  // twin". Without this the fallback is invisible, which is fine on a laptop
+  // and wrong on a server that is meant to be running the C++ rules.
+  if (ENV.engineRequired && engineMode() !== "c++") {
+    console.error(
+      "\nBITEN_ENGINE_REQUIRED is set, but the C++ engine was not found.\n" +
+        "  Build it with:  bash cpp/build.sh\n" +
+        "  Or set BITEN_ENGINE_REQUIRED=false to allow the TypeScript fallback.\n",
+    );
+    process.exit(1);
+  }
+
   const database = await pingDatabase();
   if (!database.ok) {
     console.error(

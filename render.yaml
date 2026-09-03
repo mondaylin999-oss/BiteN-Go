@@ -1,0 +1,69 @@
+# ===========================================================================
+#  render.yaml — the BiteN Go API on Render.
+#
+#  Vercel runs the frontend; the API needs somewhere that can hold a normal
+#  long-running process, because it spawns the C++ engine as a child process
+#  and keeps a PostgreSQL pool open. A serverless function can do neither.
+#
+#  HOW TO USE IT
+#      1. Push this file (it is already in the repo root).
+#      2. render.com -> New -> Blueprint -> pick this repository.
+#      3. Render reads this file and creates the service.
+#      4. Fill in the three secrets it asks for (marked sync: false below).
+#
+#  The C++ engine IS built here: Render's build image is Ubuntu and has g++
+#  and cmake, so the same cpp/build.sh that runs on your laptop runs here and
+#  the deployed API uses the real engine, not the TypeScript fallback.
+# ===========================================================================
+
+services:
+  - type: web
+    name: biten-go-api
+    runtime: node
+    plan: free
+    region: singapore # closest of Render's regions to Myanmar
+    rootDir: backend
+
+    # cpp/build.sh picks its own generator, so this works with or without
+    # cmake on the image. BITEN_ENGINE_REQUIRED below then refuses to start
+    # if the binary is somehow missing, rather than quietly falling back.
+    buildCommand: npm ci && bash cpp/build.sh && npm run build
+    startCommand: npm run serve
+
+    healthCheckPath: /health
+
+    envVars:
+      # --- filled in by you, in the Render dashboard ---------------------
+      # The Supabase PostgreSQL connection string: Supabase dashboard ->
+      # Connect -> Session pooler. NOT your laptop's localhost.
+      - key: DATABASE_URL
+        sync: false
+      # The Supabase Storage secret, same value as in backend/.env.
+      - key: SUPABASE_SERVICE_KEY
+        sync: false
+      # Your Vercel URL, e.g. https://biten-go.vercel.app  (no trailing slash)
+      - key: CORS_ORIGINS
+        sync: false
+
+      # --- generated once by Render, then kept -----------------------------
+      - key: JWT_SECRET
+        generateValue: true
+
+      # --- fixed -----------------------------------------------------------
+      - key: NODE_ENV
+        value: production
+      - key: SUPABASE_URL
+        value: https://ufkvacsdxrbqfdjnjyml.supabase.co
+      - key: SUPABASE_BUCKET
+        value: food-photos
+      # A public site must not trust every LAN address the way your laptop
+      # does. Empty disables that rule, leaving only CORS_ORIGINS above.
+      - key: CORS_ORIGIN_REGEX
+        value: ""
+      # The seeded demo logins must not exist on a public site.
+      - key: SEED_ON_START
+        value: "false"
+      # Fail loudly if the C++ engine did not build, instead of serving the
+      # TypeScript fallback without telling anyone.
+      - key: BITEN_ENGINE_REQUIRED
+        value: "true"
