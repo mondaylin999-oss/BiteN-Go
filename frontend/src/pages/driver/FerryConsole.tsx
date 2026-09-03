@@ -319,7 +319,7 @@ export default function FerryConsole() {
                     >
                       Fixed
                     </Button>
-                  ) : null}
+                  ) : null}find . -mindepth 1 -maxdepth 1 ! -name ".git" -exec rm -rf {} +
                 </div>
               </li>
             ))}

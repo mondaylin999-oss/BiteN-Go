@@ -27,3 +27,6 @@ Thumbs.db
 # logs
 *.log
 npm-debug.log*
+
+# the developer guide stays out of the repo; README.md is the one for users
+README1.md

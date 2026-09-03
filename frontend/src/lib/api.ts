@@ -183,6 +183,7 @@ export const api = {
   get: <T>(pathname: string, query?: RequestOptions["query"]) => request<T>(pathname, { query }),
   post: <T>(pathname: string, body?: unknown) => request<T>(pathname, { method: "POST", body }),
   patch: <T>(pathname: string, body?: unknown) => request<T>(pathname, { method: "PATCH", body }),
+  put: <T>(pathname: string, body?: unknown) => request<T>(pathname, { method: "PUT", body }),
   delete: <T>(pathname: string) => request<T>(pathname, { method: "DELETE" }),
 };
 
@@ -205,6 +206,8 @@ export type Health = {
   engine: "c++" | "typescript";
   database: string;
   postgres: string | null;
+  /** True when food photos are configured (Supabase keys in backend/.env). */
+  photos?: boolean;
   myanmarTime: string;
 };
 
@@ -218,6 +221,8 @@ export type MenuRow = {
     description: string | null;
     category: string;
     priceCents: number;
+    /** Public link to the dish photo, or null when it has none. */
+    imageUrl: string | null;
     availability: "available" | "unavailable" | "sold_out";
     active: boolean;
   };

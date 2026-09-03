@@ -17,10 +17,12 @@ import {
   listStudentMenu,
   placeOrder,
   setFoodAvailability,
+  setFoodPhoto,
   updateOrderStatus,
 } from "../canteen.js";
 import { getWalletBalance } from "../cashflow.js";
-import { forbidden, notFound, parseBody, parseId, requireRole, requireUser, route } from "../http.js";
+import { badRequest, forbidden, notFound, parseBody, parseId, requireRole, requireUser, route } from "../http.js";
+import { isPhotoError } from "../photos.js";
 
 export const canteenRouter = Router();
 
@@ -59,6 +61,38 @@ canteenRouter.post(
       req.body,
     );
     return { id: await createFoodItem({ agentId: agent.id, ...input }) };
+  }),
+);
+
+/**
+ * The dish's photo. The browser sends an already-shrunk JPEG as a data URL;
+ * this backend is what talks to Supabase, so no key ever reaches a browser.
+ * Sending no dataUrl (or DELETE below) takes the photo off.
+ */
+canteenRouter.put(
+  "/menu/:id/photo",
+  route(async req => {
+    const agent = requireRole(req, "agent");
+    const input = parseBody(z.object({ dataUrl: z.string().min(20).max(6_000_000) }), req.body);
+    try {
+      const result = await setFoodPhoto({ foodItemId: parseId(req.params.id), agentId: agent.id, dataUrl: input.dataUrl });
+      if (!result) throw forbidden("You can only put a photo on food from your own board.");
+      return result;
+    } catch (error) {
+      // Anything photos.ts rejected is the agent's problem to fix, not a crash.
+      if (isPhotoError(error)) throw badRequest(error instanceof Error ? error.message : "Could not save that photo.");
+      throw error;
+    }
+  }),
+);
+
+canteenRouter.delete(
+  "/menu/:id/photo",
+  route(async req => {
+    const agent = requireRole(req, "agent");
+    const result = await setFoodPhoto({ foodItemId: parseId(req.params.id), agentId: agent.id, dataUrl: null });
+    if (!result) throw forbidden("You can only change food on your own board.");
+    return result;
   }),
 );
 

@@ -40,6 +40,14 @@ export const ENV = {
   seedOnStart: flag("SEED_ON_START", true),
   seedPassword: text("SEED_PASSWORD", "biten123"),
 
+  // --- food photos (Supabase Storage) ---------------------------------
+  // Leave these out and the app runs exactly as before, without photos.
+  // SUPABASE_SERVICE_KEY must be the SECRET key (sb_secret_… or the older
+  // service_role JWT). Never the publishable one, and never in the frontend.
+  supabaseUrl: text("SUPABASE_URL"),
+  supabaseServiceKey: text("SUPABASE_SERVICE_KEY"),
+  supabaseBucket: text("SUPABASE_BUCKET", "food-photos"),
+
   enginePath: text("BITEN_ENGINE_PATH"),
   engineRequired: flag("BITEN_ENGINE_REQUIRED", false),
 
@@ -54,7 +62,7 @@ export function assertEnv() {
     throw new Error(
       "DATABASE_URL is not set.\n" +
         "  Copy backend/.env.example to backend/.env and put your PostgreSQL\n" +
-        "  connection string in it. See README.md section 3.",
+        "  connection string in it. See README1.md section 3.",
     );
   }
   if (ENV.isProduction && ENV.jwtSecret.startsWith("dev-only")) {

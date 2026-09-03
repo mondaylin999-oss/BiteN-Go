@@ -74,7 +74,10 @@ export const foodItems = pgTable(
     name: varchar("name", { length: 120 }).notNull(),
     description: varchar("description", { length: 280 }),
     category: varchar("category", { length: 60 }).notNull().default("Main"),
+    /** Public link to the photo in Supabase Storage (see src/photos.ts). */
     imageUrl: varchar("image_url", { length: 2048 }),
+    /** Its path inside the bucket, kept so the file can be replaced or removed. */
+    imagePath: varchar("image_path", { length: 512 }),
     priceCents: integer("price_cents").notNull(),
     active: boolean("active").notNull().default(true),
     availability: foodAvailability("availability").notNull().default("available"),

@@ -104,7 +104,7 @@ export async function assertSchemaInstalled() {
         "\n" +
         "  Otherwise run it now:\n" +
         "    psql -U postgres -d biten_go_db -f database/schema.sql\n" +
-        "  (See README.md section 3.)",
+        "  (See README1.md section 3.)",
     );
   }
 }

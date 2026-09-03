@@ -17,6 +17,7 @@ import cors from "cors";
 import { ENV, assertEnv } from "./env.js";
 import { assertSchemaInstalled, closeDatabase, pingDatabase } from "./database.js";
 import { engineMode, enginePath, callEngine } from "./engine.js";
+import { photosEnabled } from "./photos.js";
 import { attachUser, errorMiddleware, route } from "./http.js";
 import { authRouter } from "./routes/auth.js";
 import { canteenRouter } from "./routes/canteen.js";
@@ -61,6 +62,7 @@ app.get(
       enginePath: enginePath(),
       database: database.ok ? "connected" : `unavailable: ${database.error}`,
       postgres: database.serverVersion ?? null,
+      photos: photosEnabled(),
       myanmarTime: yangonTimeLabel(),
       time: new Date().toISOString(),
     };

@@ -10,6 +10,7 @@ import { and, desc, eq, inArray } from "drizzle-orm";
 import { db } from "./database.js";
 import { foodItems, orderItems, orders, users, type FoodItem } from "../drizzle/schema.js";
 import { callEngine, EngineRuleError } from "./engine.js";
+import { deleteFoodPhoto, uploadFoodPhoto } from "./photos.js";
 import { yangonDateKey, yangonHour } from "./time.js";
 import { createMovement, getWalletBalance } from "./cashflow.js";
 
@@ -72,6 +73,40 @@ export async function createFoodItem(input: {
     })
     .returning({ id: foodItems.id });
   return inserted[0]!.id;
+}
+
+/**
+ * Puts a photo on one dish, or takes it off.
+ *
+ * The dish must belong to this agent — that check lives here, in the one place
+ * every path goes through, rather than being duplicated into Supabase rules.
+ * Replacing a photo deletes the old file, so the bucket does not fill up with
+ * pictures nothing points at.
+ */
+export async function setFoodPhoto(input: { foodItemId: number; agentId: number; dataUrl?: string | null }) {
+  const rows = await db()
+    .select({ id: foodItems.id, imagePath: foodItems.imagePath })
+    .from(foodItems)
+    .where(and(eq(foodItems.id, input.foodItemId), eq(foodItems.agentId, input.agentId)))
+    .limit(1);
+  const dish = rows[0];
+  if (!dish) return null; // not theirs, or gone — the route turns this into 403
+
+  const previousPath = dish.imagePath;
+
+  // No picture given = take the photo off.
+  if (!input.dataUrl) {
+    await db().update(foodItems).set({ imageUrl: null, imagePath: null }).where(eq(foodItems.id, dish.id));
+    await deleteFoodPhoto(previousPath);
+    return { imageUrl: null as string | null };
+  }
+
+  const stored = await uploadFoodPhoto({ dataUrl: input.dataUrl, agentId: input.agentId, foodItemId: dish.id });
+  await db().update(foodItems).set({ imageUrl: stored.imageUrl, imagePath: stored.imagePath }).where(eq(foodItems.id, dish.id));
+
+  // Only once the new one is safely saved is the old file removed.
+  if (previousPath && previousPath !== stored.imagePath) await deleteFoodPhoto(previousPath);
+  return { imageUrl: stored.imageUrl };
 }
 
 export async function setFoodAvailability(id: number, availability: FoodAvailability, agentId: number) {

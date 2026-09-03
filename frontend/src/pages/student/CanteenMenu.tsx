@@ -118,7 +118,20 @@ export default function CanteenMenu() {
               {visible.map(row => {
                 const quantity = basket[row.item.id] ?? 0;
                 return (
-                  <article key={row.item.id} className="card card-pad flex flex-col gap-3">
+                  <article key={row.item.id} className="card flex flex-col overflow-hidden">
+                    {/* The photo, exactly as the Nexus design draws it: a wide
+                        band across the top of the card. A dish with no photo
+                        gets no band at all rather than an empty grey box. */}
+                    {row.item.imageUrl ? (
+                      <img
+                        src={row.item.imageUrl}
+                        alt={row.item.name}
+                        loading="lazy"
+                        className="h-40 w-full shrink-0 border-b border-outline-variant bg-surface-container object-cover"
+                      />
+                    ) : null}
+
+                    <div className="card-pad flex flex-1 flex-col gap-3">
                     <div className="flex items-start justify-between gap-2">
                       <div className="min-w-0">
                         <h3 className="text-headline-md font-semibold text-on-surface">{row.item.name}</h3>
@@ -156,6 +169,7 @@ export default function CanteenMenu() {
                           </button>
                         </div>
                       )}
+                    </div>
                     </div>
                   </article>
                 );

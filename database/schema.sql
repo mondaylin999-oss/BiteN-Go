@@ -20,7 +20,7 @@
 --
 --  You do NOT need to insert any accounts by hand. The backend seeds the
 --  admin / agent / student / driver logins on its first start
---  (backend/src/seed.ts) — see section 4 of README.md.
+--  (backend/src/seed.ts) — see section 4 of README1.md.
 -- ===========================================================================
 
 BEGIN;
@@ -104,7 +104,8 @@ CREATE TABLE IF NOT EXISTS food_items (
   name                    VARCHAR(120) NOT NULL,
   description             VARCHAR(280),
   category                VARCHAR(60)  NOT NULL DEFAULT 'Main',
-  image_url               VARCHAR(2048),
+  image_url               VARCHAR(2048),   -- public link to the photo in Supabase Storage
+  image_path              VARCHAR(512),    -- where it lives in the bucket, so it can be replaced/removed
   price_cents             INTEGER      NOT NULL CHECK (price_cents > 0),
   active                  BOOLEAN      NOT NULL DEFAULT TRUE,
   availability            food_availability NOT NULL DEFAULT 'available',
@@ -263,6 +264,11 @@ CREATE INDEX IF NOT EXISTS vehicle_maintenance_vehicle_idx ON vehicle_maintenanc
 -- table exactly as it was — so the columns added for the monthly ferry are
 -- added here instead. All of this is safe to run on a fresh database too.
 -- ---------------------------------------------------------------------------
+-- Food photos: the picture lives in Supabase Storage, PostgreSQL keeps the
+-- link and the path inside the bucket. See README section 19.
+ALTER TABLE food_items ADD COLUMN IF NOT EXISTS image_url  VARCHAR(2048);
+ALTER TABLE food_items ADD COLUMN IF NOT EXISTS image_path VARCHAR(512);
+
 -- The simplified ferry: two times a day live on the road, and the road is
 -- sold for a range of months. Nothing is per-day any more.
 ALTER TABLE transport_routes ADD COLUMN IF NOT EXISTS morning_time VARCHAR(5) NOT NULL DEFAULT '06:30';
