@@ -27,7 +27,13 @@ services:
     # cpp/build.sh picks its own generator, so this works with or without
     # cmake on the image. BITEN_ENGINE_REQUIRED below then refuses to start
     # if the binary is somehow missing, rather than quietly falling back.
-    buildCommand: npm ci && bash cpp/build.sh && npm run build
+    # --include=dev is required: NODE_ENV=production below applies to the
+    # BUILD as well as the run, and npm then skips devDependencies - where
+    # typescript and every @types package lives. Without it tsc runs with no
+    # declarations and the build dies on "Could not find a declaration file
+    # for module express". Only dist/ is used at runtime, so nothing extra
+    # ships to the running service.
+    buildCommand: npm ci --include=dev && bash cpp/build.sh && npm run build
     startCommand: npm run serve
 
     healthCheckPath: /health
