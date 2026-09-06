@@ -47,35 +47,28 @@ const NAV: Record<Role, NavItem[]> = {
     { href: "/student/orders", label: "Meal Orders", icon: <Receipt className="h-5 w-5" />, context: "canteen" },
     { href: "/student/wallet", label: "Wallet", icon: <Wallet className="h-5 w-5" />, context: "canteen" },
     { href: "/student/ferry", label: "Ferry", icon: <Bus className="h-5 w-5" />, context: "ferry" },
-    { href: "/student/passes", label: "My Ferry Pass", icon: <Ticket className="h-5 w-5" />, context: "ferry" },
+    { href: "/student/passes", label: "My Pass", icon: <Ticket className="h-5 w-5" />, context: "ferry" },
     { href: "/profile", label: "Profile", icon: <UserIcon className="h-5 w-5" /> },
   ],
   agent: [
-    { href: "/agent", label: "Kitchen Display", icon: <ChefHat className="h-5 w-5" />, context: "canteen" },
-    { href: "/agent/menu", label: "Menu Board", icon: <UtensilsCrossed className="h-5 w-5" />, context: "canteen" },
-    { href: "/agent/wallet", label: "Cash & Top-ups", icon: <Wallet className="h-5 w-5" />, context: "canteen" },
+    { href: "/agent", label: "Orders", icon: <ChefHat className="h-5 w-5" />, context: "canteen" },
+    { href: "/agent/menu", label: "Menu", icon: <UtensilsCrossed className="h-5 w-5" />, context: "canteen" },
+    { href: "/agent/wallet", label: "Money", icon: <Wallet className="h-5 w-5" />, context: "canteen" },
     { href: "/profile", label: "Profile", icon: <UserIcon className="h-5 w-5" /> },
   ],
   driver: [
-    { href: "/driver", label: "My Ferry", icon: <Bus className="h-5 w-5" />, context: "ferry" },
-    { href: "/driver/route", label: "Road & Map", icon: <MapIcon className="h-5 w-5" />, context: "ferry" },
+    { href: "/driver", label: "My Bus", icon: <Bus className="h-5 w-5" />, context: "ferry" },
+    { href: "/driver/route", label: "Route", icon: <MapIcon className="h-5 w-5" />, context: "ferry" },
     { href: "/profile", label: "Profile", icon: <UserIcon className="h-5 w-5" /> },
   ],
   admin: [
     { href: "/admin", label: "Overview", icon: <LayoutDashboard className="h-5 w-5" /> },
     { href: "/admin/people", label: "People", icon: <Users className="h-5 w-5" /> },
     { href: "/admin/transport", label: "Transport", icon: <Bus className="h-5 w-5" />, context: "ferry" },
-    { href: "/admin/canteen", label: "Canteen Ops", icon: <UtensilsCrossed className="h-5 w-5" />, context: "canteen" },
-    { href: "/admin/history", label: "Cash Flow", icon: <ClipboardList className="h-5 w-5" /> },
+    { href: "/admin/canteen", label: "Canteen", icon: <UtensilsCrossed className="h-5 w-5" />, context: "canteen" },
+    { href: "/admin/history", label: "Money", icon: <ClipboardList className="h-5 w-5" /> },
     { href: "/profile", label: "Profile", icon: <UserIcon className="h-5 w-5" /> },
   ],
-};
-
-const ROLE_LABEL: Record<Role, string> = {
-  user: "Student",
-  agent: "Canteen agent",
-  driver: "Transport agent",
-  admin: "Administrator",
 };
 
 function isActive(current: string, href: string) {
@@ -166,7 +159,6 @@ export function AppShell({ children }: { children: ReactNode }) {
           </Link>
           <div className="hidden text-right sm:block">
             <p className="max-w-[160px] truncate text-[13px] font-semibold text-on-surface">{user.name ?? user.username}</p>
-            <p className="text-[11px] uppercase tracking-wider text-on-surface-variant">{t(ROLE_LABEL[user.role])}</p>
           </div>
           <span className="flex h-9 w-9 items-center justify-center rounded-full bg-surface-container-highest text-[13px] font-bold text-on-surface">
             {initials(user.name ?? user.username)}
@@ -179,6 +171,9 @@ export function AppShell({ children }: { children: ReactNode }) {
 
       {/* ---------- desktop side rail ---------- */}
       <aside className="fixed left-0 top-16 z-40 hidden h-[calc(100vh-64px)] w-64 flex-col border-r border-outline-variant bg-surface-container-low p-stack-md md:flex">
+        {/* Who is signed in - their name, not their job title. The wording
+            of the app stays the same for everyone; what differs is which
+            links are in the nav below. */}
         <div className="mb-stack-lg rounded-lg border border-surface-container-high bg-surface p-4 shadow-card">
           <div className="flex items-center gap-3">
             <span
@@ -189,10 +184,8 @@ export function AppShell({ children }: { children: ReactNode }) {
               <ShieldCheck className="h-5 w-5" />
             </span>
             <div className="min-w-0">
-              <h2 className="text-headline-md font-bold leading-tight text-on-surface">{t("System Switcher")}</h2>
-              <p className="truncate text-label font-semibold text-secondary">
-                {t("Current")}: {t(ROLE_LABEL[user.role])}
-              </p>
+              <h2 className="truncate text-headline-md font-bold leading-tight text-on-surface">{user.name ?? user.username}</h2>
+              <p className="truncate text-label font-semibold text-secondary">BiteN Go</p>
             </div>
           </div>
         </div>
@@ -252,4 +245,4 @@ export function AppShell({ children }: { children: ReactNode }) {
   );
 }
 
-export { ROLE_LABEL, titleCase };
+export { titleCase };

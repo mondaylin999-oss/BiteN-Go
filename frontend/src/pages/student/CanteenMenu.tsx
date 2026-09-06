@@ -7,7 +7,7 @@
 // ===========================================================================
 
 import { useMemo, useState } from "react";
-import { Clock, Minus, Plus, ShoppingBasket, Wallet } from "lucide-react";
+import { Clock, Minus, Plus, ShoppingBasket, UtensilsCrossed, Wallet } from "lucide-react";
 import { api, ApiError, type MenuRow, type PreorderWindow } from "@/lib/api";
 import { useApiData } from "@/hooks/useApiData";
 import { kyats } from "@/lib/format";
@@ -114,22 +114,18 @@ export default function CanteenMenu() {
               }
             />
           ) : (
-            <div className="grid gap-stack-md sm:grid-cols-2">
+            <div className="grid gap-stack-md sm:grid-cols-2 xl:grid-cols-3">
               {visible.map(row => {
                 const quantity = basket[row.item.id] ?? 0;
                 return (
                   <article key={row.item.id} className="card flex flex-col overflow-hidden">
-                    {/* The photo, exactly as the Nexus design draws it: a wide
-                        band across the top of the card. A dish with no photo
-                        gets no band at all rather than an empty grey box. */}
-                    {row.item.imageUrl ? (
-                      <img
-                        src={row.item.imageUrl}
-                        alt={row.item.name}
-                        loading="lazy"
-                        className="h-40 w-full shrink-0 border-b border-outline-variant bg-surface-container object-cover"
-                      />
-                    ) : null}
+                    {/* The photo leads the card and runs edge to edge: it is
+                        what people actually choose by. A fixed 4:3 box rather
+                        than a fixed height, so every card in the row lines up
+                        whatever shape the picture was taken in, and a dish
+                        with no photo still holds the same space instead of
+                        leaving a ragged grid. */}
+                    <DishPhoto url={row.item.imageUrl} name={row.item.name} />
 
                     <div className="card-pad flex flex-1 flex-col gap-3">
                     <div className="flex items-start justify-between gap-2">
@@ -139,10 +135,10 @@ export default function CanteenMenu() {
                           {row.item.category} · {row.agentName ?? "Canteen"}
                         </p>
                       </div>
-                      <span className="tabular shrink-0 text-[16px] font-bold text-secondary">{kyats(row.item.priceCents)}</span>
+                      <span className="tabular shrink-0 text-[17px] font-bold text-secondary">{kyats(row.item.priceCents)}</span>
                     </div>
 
-                    {row.item.description ? <p className="text-[13px] leading-relaxed text-on-surface-variant">{row.item.description}</p> : null}
+                    {row.item.description ? <p className="line-clamp-2 text-[13px] leading-relaxed text-on-surface-variant">{row.item.description}</p> : null}
 
                     <div className="mt-auto flex items-center justify-between gap-2">
                       <Badge tone="canteen">Available</Badge>
@@ -237,4 +233,22 @@ export default function CanteenMenu() {
       </div>
     </>
   );
+}
+
+/** The dish photo from Supabase Storage, in a fixed 4:3 frame.
+ *  Falls back to a plain placeholder when there is no photo, or when the URL
+ *  will not load - a deleted object, or a bucket left private - so a card
+ *  never shows a broken-image icon and never collapses out of the grid. */
+function DishPhoto({ url, name }: { url: string | null; name: string }) {
+  const [broken, setBroken] = useState(false);
+  const frame = "aspect-[4/3] w-full shrink-0 border-b border-outline-variant bg-surface-container";
+
+  if (!url || broken) {
+    return (
+      <div className={`${frame} flex items-center justify-center text-on-surface-variant`}>
+        <UtensilsCrossed className="h-10 w-10 opacity-60" />
+      </div>
+    );
+  }
+  return <img src={url} alt={name} loading="lazy" onError={() => setBroken(true)} className={`${frame} object-cover`} />;
 }

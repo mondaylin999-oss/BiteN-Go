@@ -9,6 +9,10 @@
 //
 //  A signed-out visitor always sees the login screen; a signed-in one can
 //  never open another role's screens.
+//
+//  Signed out, /admin /agent /driver show the staff sign-in rather than the
+//  public page. That is presentation only - the role gate below, and the
+//  server behind it, are what actually decide who may see what.
 // ===========================================================================
 
 import { useEffect, type ReactNode } from "react";
@@ -70,9 +74,18 @@ export default function App() {
   if (!user) {
     // The login screen shows the connection error itself; this covers the
     // case where the server disappears while someone is signed out.
+    //
+    // /admin, /agent and /driver are staff doors: they render the same login
+    // screen in its quieter form rather than bouncing to the public page, so
+    // the campus team has somewhere to go that the student page never
+    // mentions. Keeping the address means a bookmarked /admin still lands
+    // where it should once signed in.
     return (
       <Switch>
         <Route path="/" component={Login} />
+        <Route path="/admin" component={Login} />
+        <Route path="/agent" component={Login} />
+        <Route path="/driver" component={Login} />
         <Route>
           <Redirect to="/" />
         </Route>

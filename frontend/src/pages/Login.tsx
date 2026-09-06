@@ -1,26 +1,35 @@
 // ===========================================================================
-//  Login.tsx — the way into all four portals.
-//  Students can also create their own account here; staff accounts (agent,
-//  transport agent, admin) are created by the administrator.
+//  Login.tsx — the way in.
+//
+//  TWO DOORS, ONE FORM
+//  -------------------
+//  "/"        the public door. Students sign in or create an account. It says
+//             nothing about staff: no roles, no job titles, no sample logins.
+//  "/admin"   the staff door — also /agent and /driver. Same form, different
+//             heading, and no "create an account" tab, because staff accounts
+//             are made by the office rather than self-served.
+//
+//  The staff door is NOT a security boundary; it only keeps staff wording out
+//  of the public page. Who may see what is decided by the server on every
+//  request, and by the role gate in App.tsx.
 // ===========================================================================
 
 import { useState, type FormEvent } from "react";
 import { useLocation } from "wouter";
-import { Bus, ShieldCheck, UtensilsCrossed } from "lucide-react";
+import { Bus, Lock, ShieldCheck, UtensilsCrossed } from "lucide-react";
 import { useAuth, homePathFor } from "@/lib/auth";
 import { ApiError } from "@/lib/api";
 import { Button, ErrorNote, Field, Input } from "@/components/ui";
 
-const DEMO_LOGINS = [
-  { username: "admin", label: "Administrator" },
-  { username: "agent01", label: "Canteen agent" },
-  { username: "driver01", label: "Transport agent" },
-  { username: "student01", label: "Student" },
-];
+/** The paths that mean "someone from the campus team is signing in". */
+const STAFF_PATHS = ["/admin", "/agent", "/driver"];
 
 export default function Login() {
   const { login, register, health, error: connectionError, refresh } = useAuth();
-  const [, navigate] = useLocation();
+  const [location, navigate] = useLocation();
+  const staffDoor = STAFF_PATHS.includes(location);
+
+  // Only the public door offers account creation.
   const [mode, setMode] = useState<"login" | "register">("login");
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
@@ -30,21 +39,131 @@ export default function Login() {
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
 
+  const registering = !staffDoor && mode === "register";
+
   async function submit(event: FormEvent) {
     event.preventDefault();
     setBusy(true);
     setMessage(null);
     try {
-      const user =
-        mode === "login"
-          ? await login(username.trim(), password)
-          : await register({ name: name.trim(), username: username.trim() || undefined, email: email.trim() || undefined, password });
+      const user = registering
+        ? await register({ name: name.trim(), username: username.trim() || undefined, email: email.trim() || undefined, password })
+        : await login(username.trim(), password);
       navigate(homePathFor(user.role));
     } catch (caught) {
       setMessage(caught instanceof ApiError ? caught.message : "Something went wrong. Please try again.");
     } finally {
       setBusy(false);
     }
+  }
+
+  const form = (
+    <div className="card p-6">
+      {staffDoor ? (
+        <div className="mb-5 flex items-center gap-3">
+          <span className="flex h-10 w-10 items-center justify-center rounded-lg bg-surface-container-high text-on-surface">
+            <Lock className="h-5 w-5" />
+          </span>
+          <div>
+            <h2 className="text-headline-md font-bold leading-tight text-on-surface">Campus team sign in</h2>
+            <p className="text-[13px] text-on-surface-variant">Use the account the office gave you.</p>
+          </div>
+        </div>
+      ) : (
+        <div className="mb-5 flex rounded-lg bg-surface-container-low p-1">
+          {(["login", "register"] as const).map(value => (
+            <button
+              key={value}
+              className={`flex-1 rounded-[6px] px-3 py-2 text-[14px] font-semibold transition-colors ${
+                mode === value ? "bg-surface-container-lowest text-on-surface shadow-card" : "text-on-surface-variant"
+              }`}
+              onClick={() => {
+                setMode(value);
+                setMessage(null);
+              }}
+              type="button"
+            >
+              {value === "login" ? "Sign in" : "Create account"}
+            </button>
+          ))}
+        </div>
+      )}
+
+      {connectionError ? (
+        <div className="mb-4">
+          <ErrorNote message={connectionError} onRetry={() => void refresh()} />
+        </div>
+      ) : null}
+
+      <form className="space-y-4" onSubmit={submit}>
+        {registering ? (
+          <>
+            <Field label="Full name">
+              <Input value={name} onChange={event => setName(event.target.value)} required minLength={2} placeholder="Aye Aye" autoComplete="name" />
+            </Field>
+            <Field label="Email (optional)">
+              <Input type="email" value={email} onChange={event => setEmail(event.target.value)} placeholder="ayeaye@campus.edu" autoComplete="email" />
+            </Field>
+          </>
+        ) : null}
+
+        <Field label="Username" hint={registering ? "Leave empty and one will be made from your name." : undefined}>
+          <Input
+            value={username}
+            onChange={event => setUsername(event.target.value)}
+            required={!registering}
+            placeholder={staffDoor ? "your username" : "student01"}
+            autoComplete="username"
+            autoCapitalize="none"
+            spellCheck={false}
+          />
+        </Field>
+
+        <Field label="Password">
+          <Input
+            type="password"
+            value={password}
+            onChange={event => setPassword(event.target.value)}
+            required
+            minLength={registering ? 6 : 1}
+            placeholder="••••••••"
+            autoComplete={registering ? "new-password" : "current-password"}
+          />
+        </Field>
+
+        {message ? <p className="rounded-lg bg-error-container px-3 py-2 text-[13px] font-medium text-on-error-container">{message}</p> : null}
+
+        <Button type="submit" className="w-full" busy={busy}>
+          {registering ? "Create my account" : "Sign in"}
+        </Button>
+      </form>
+
+      {staffDoor ? (
+        <p className="mt-4 border-t border-outline-variant pt-4 text-[13px] text-on-surface-variant">
+          Looking for the student app?{" "}
+          <button type="button" className="font-semibold text-primary underline-offset-2 hover:underline" onClick={() => navigate("/")}>
+            Go to BiteN Go
+          </button>
+        </p>
+      ) : null}
+    </div>
+  );
+
+  // The staff door is a plain, quiet page — no marketing, nothing to explore.
+  if (staffDoor) {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-surface px-gutter py-10">
+        <div className="w-full max-w-sm">
+          <div className="mb-6 flex items-center justify-center gap-3">
+            <span className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary text-on-primary">
+              <UtensilsCrossed className="h-5 w-5" />
+            </span>
+            <span className="text-headline-md font-bold tracking-[-0.02em] text-on-surface">BiteN Go</span>
+          </div>
+          {form}
+        </div>
+      </div>
+    );
   }
 
   return (
@@ -64,15 +183,13 @@ export default function Login() {
 
           <p className="mt-6 max-w-xl text-[16px] leading-relaxed text-on-surface-variant">
             Pre-order lunch before the kitchen closes its window, keep a campus wallet in kyat, and book a seat on the ferry bus —
-            all on one account, all kept on your own computer.
+            all on one account.
           </p>
 
           <div className="mt-8 grid gap-3 sm:grid-cols-2">
             <div className="card card-pad">
               <span className="chip bg-secondary-container text-on-secondary-container">Canteen</span>
-              <p className="mt-3 text-[14px] text-on-surface-variant">
-                Menus, pre-order window, kitchen display board and cash-or-wallet payment.
-              </p>
+              <p className="mt-3 text-[14px] text-on-surface-variant">Today's menu, pre-order before the window closes, pay by wallet or cash.</p>
             </div>
             <div className="card card-pad">
               <span className="chip bg-tertiary-container text-on-tertiary-container">Ferry</span>
@@ -95,98 +212,7 @@ export default function Login() {
         </section>
 
         {/* ---------- form ---------- */}
-        <section className="w-full lg:max-w-md">
-          <div className="card p-6">
-            <div className="mb-5 flex rounded-lg bg-surface-container-low p-1">
-              {(["login", "register"] as const).map(value => (
-                <button
-                  key={value}
-                  className={`flex-1 rounded-[6px] px-3 py-2 text-[14px] font-semibold transition-colors ${
-                    mode === value ? "bg-surface-container-lowest text-on-surface shadow-card" : "text-on-surface-variant"
-                  }`}
-                  onClick={() => {
-                    setMode(value);
-                    setMessage(null);
-                  }}
-                  type="button"
-                >
-                  {value === "login" ? "Sign in" : "New student"}
-                </button>
-              ))}
-            </div>
-
-            {connectionError ? (
-              <div className="mb-4">
-                <ErrorNote message={connectionError} onRetry={() => void refresh()} />
-              </div>
-            ) : null}
-
-            <form className="space-y-4" onSubmit={submit}>
-              {mode === "register" ? (
-                <>
-                  <Field label="Full name">
-                    <Input value={name} onChange={event => setName(event.target.value)} required minLength={2} placeholder="Aye Aye" autoComplete="name" />
-                  </Field>
-                  <Field label="Email (optional)">
-                    <Input type="email" value={email} onChange={event => setEmail(event.target.value)} placeholder="ayeaye@campus.edu" autoComplete="email" />
-                  </Field>
-                </>
-              ) : null}
-
-              <Field label="Username" hint={mode === "register" ? "Leave empty and one will be made from your name." : undefined}>
-                <Input
-                  value={username}
-                  onChange={event => setUsername(event.target.value)}
-                  required={mode === "login"}
-                  placeholder="student01"
-                  autoComplete="username"
-                  autoCapitalize="none"
-                  spellCheck={false}
-                />
-              </Field>
-
-              <Field label="Password">
-                <Input
-                  type="password"
-                  value={password}
-                  onChange={event => setPassword(event.target.value)}
-                  required
-                  minLength={mode === "register" ? 6 : 1}
-                  placeholder="••••••••"
-                  autoComplete={mode === "login" ? "current-password" : "new-password"}
-                />
-              </Field>
-
-              {message ? <p className="rounded-lg bg-error-container px-3 py-2 text-[13px] font-medium text-on-error-container">{message}</p> : null}
-
-              <Button type="submit" className="w-full" busy={busy}>
-                {mode === "login" ? "Sign in" : "Create my student account"}
-              </Button>
-            </form>
-
-            {mode === "login" ? (
-              <div className="mt-5 border-t border-outline-variant pt-4">
-                <p className="text-label font-semibold uppercase tracking-wider text-on-surface-variant">Starter accounts (password: biten123)</p>
-                <div className="mt-2 grid grid-cols-2 gap-2">
-                  {DEMO_LOGINS.map(demo => (
-                    <button
-                      key={demo.username}
-                      type="button"
-                      className="rounded-lg border border-outline-variant px-3 py-2 text-left transition-colors hover:bg-surface-container-high"
-                      onClick={() => {
-                        setUsername(demo.username);
-                        setPassword("biten123");
-                      }}
-                    >
-                      <span className="tabular block text-[13px] font-semibold text-on-surface">{demo.username}</span>
-                      <span className="block text-[11px] uppercase tracking-wide text-on-surface-variant">{demo.label}</span>
-                    </button>
-                  ))}
-                </div>
-              </div>
-            ) : null}
-          </div>
-        </section>
+        <section className="w-full lg:max-w-md">{form}</section>
       </div>
     </div>
   );
