@@ -1,0 +1,79 @@
+# ===========================================================================
+#  keep-awake.yml — stops the Render free tier sleeping during the hours
+#  people actually use the apps.
+#
+#  WHY THIS EXISTS
+#  ---------------
+#  A free Render service spins down after 15 minutes with no traffic, and the
+#  next request then waits ~50 seconds while it starts again. Measured here:
+#  22.9 seconds cold versus 0.13 warm. To anyone you show the site to, that
+#  reads as broken.
+#
+#  WHY IT ONLY RUNS PART OF THE DAY
+#  --------------------------------
+#  Render's free plan gives 750 instance-hours a month across the WHOLE
+#  workspace, not per service. Two services awake around the clock would want
+#  1,440 - nearly double the allowance - and everything stops when it runs
+#  out. Eleven hours a day for two services is 660, which leaves real margin.
+#
+#  The window is 05:00-16:00 UTC = 11:30-22:30 Myanmar time. That covers
+#  BiteN Go's pre-order window, which opens at noon Myanmar time and runs to
+#  midnight. Outside it both services sleep, and the first visitor waits.
+#
+#  WHY IT LIVES IN THIS REPOSITORY
+#  -------------------------------
+#  BiteN-Go is public, so GitHub Actions minutes are free and unmetered here.
+#  GameBuddy is private, where a job this frequent would consume the whole
+#  monthly quota - so this one workflow pings both APIs from the public side.
+# ===========================================================================
+
+name: Keep APIs awake
+
+on:
+  schedule:
+    # Every 10 minutes, 05:00-15:59 UTC. The odd minute offsets avoid the top
+    # of the hour, when GitHub's scheduler is busiest and runs are delayed the
+    # most - and a delay past 15 minutes is exactly what lets Render sleep.
+    - cron: "4,14,24,34,44,54 5-15 * * *"
+  workflow_dispatch: # so you can also run it by hand from the Actions tab
+
+# Two pings should never queue up behind each other.
+concurrency:
+  group: keep-awake
+  cancel-in-progress: true
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    strategy:
+      # One service failing must not hide the other's result.
+      fail-fast: false
+      matrix:
+        include:
+          - name: BiteN Go
+            url: https://biten-go-api.onrender.com/health
+          - name: GameBuddy
+            url: https://gamebuddy-api.onrender.com/health
+
+    steps:
+      - name: Ping ${{ matrix.name }}
+        run: |
+          # --max-time 90: a sleeping service can take ~50s to wake, and the
+          # whole point of the first ping of the day is to sit through that.
+          # Retries cover a wake-up that overruns rather than a real outage.
+          code=$(curl --silent --show-error --location \
+                      --max-time 90 --retry 2 --retry-delay 15 \
+                      --write-out '%{http_code}' \
+                      --output /tmp/body.json \
+                      '${{ matrix.url }}') || true
+
+          echo "HTTP $code"
+          head -c 400 /tmp/body.json || true
+          echo
+
+          if [ "$code" != "200" ]; then
+            echo "::error::${{ matrix.name }} answered $code instead of 200"
+            exit 1
+          fi
