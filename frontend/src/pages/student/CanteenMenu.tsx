@@ -114,7 +114,7 @@ export default function CanteenMenu() {
               }
             />
           ) : (
-            <div className="grid gap-stack-md sm:grid-cols-2 xl:grid-cols-3">
+            <div className="grid gap-stack-md sm:grid-cols-2">
               {visible.map(row => {
                 const quantity = basket[row.item.id] ?? 0;
                 return (
@@ -241,7 +241,7 @@ export default function CanteenMenu() {
  *  never shows a broken-image icon and never collapses out of the grid. */
 function DishPhoto({ url, name }: { url: string | null; name: string }) {
   const [broken, setBroken] = useState(false);
-  const frame = "aspect-[4/3] w-full shrink-0 border-b border-outline-variant bg-surface-container";
+  const frame = "aspect-[3/2] w-full shrink-0 border-b border-outline-variant bg-surface-container";
 
   if (!url || broken) {
     return (

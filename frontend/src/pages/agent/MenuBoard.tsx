@@ -213,10 +213,10 @@ export default function MenuBoard() {
                             src={row.item.imageUrl}
                             alt={row.item.name}
                             loading="lazy"
-                            className="h-14 w-14 shrink-0 rounded-lg border border-outline-variant object-cover"
+                            className="h-20 w-28 shrink-0 rounded-lg border border-outline-variant bg-surface-container object-cover"
                           />
                         ) : (
-                          <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-lg border border-dashed border-outline-variant text-outline">
+                          <div className="flex h-20 w-28 shrink-0 items-center justify-center rounded-lg border border-dashed border-outline-variant text-outline">
                             <ImageOff className="h-5 w-5" />
                           </div>
                         )}
